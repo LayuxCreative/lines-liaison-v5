@@ -1,0 +1,37 @@
+{
+  "project": {
+    "name": "Lines Liaison",
+    "type": "react-typescript",
+    "database": "supabase",
+    "rules_files": [
+      "USER_RULES.md",
+      "PROJECT_RULES.md"
+    ]
+  },
+  "development": {
+    "response_style": "extremely_concise",
+    "auto_execute": true,
+    "no_suggestions": true,
+    "language": "english_only",
+    "database_exclusive": "supabase"
+  },
+  "ai_behavior": {
+    "concise_responses": true,
+    "immediate_action": true,
+    "no_proposals": true,
+    "strict_compliance": true,
+    "minimal_explanation": true
+  },
+  "builder_mcp": {
+    "auto_handle_changes": true,
+    "auto_open_files": true,
+    "auto_accept": true,
+    "handle_all_code_changes": true,
+    "click_accept_button": true,
+    "file_management": {
+      "open_modified_files": true,
+      "accept_all_changes": true,
+      "auto_save": true
+    }
+  }
+}

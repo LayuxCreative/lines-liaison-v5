@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Server Health</title>
+</head>
+<body>
+    <h1>Test Server Health</h1>
+    <button onclick="testHealth()">Test Health Check</button>
+    <div id="result"></div>
+
+    <script>
+        // Auto-test on page load
+        window.onload = function() {
+            testHealth();
+        };
+        
+        async function testHealth() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Testing...';
+            
+            try {
+                console.log('Testing health endpoint...');
+                const response = await fetch('http://localhost:3001/api/health');
+                console.log('Health response:', response.status, response.ok);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.innerHTML = `<p style="color: green;">Health check successful! Status: ${response.status}, Data: ${JSON.stringify(data)}</p>`;
+                } else {
+                    resultDiv.innerHTML = `<p style="color: red;">Health check failed! Status: ${response.status}</p>`;
+                }
+            } catch (error) {
+                console.error('Health check error:', error);
+                resultDiv.innerHTML = `<p style="color: red;">Health check error: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

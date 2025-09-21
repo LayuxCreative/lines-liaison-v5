@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Backdrop Blur Utilities and Cross-Browser Support */
+@layer utilities {
+  /* Enhanced backdrop blur with fallbacks */
+  .backdrop-blur-enhanced {
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+  }
+
+  .backdrop-blur-light {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  /* Glassmorphism effect */
+  .glass-effect {
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  /* Dark glass effect for overlays */
+  .glass-overlay {
+    background: rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+}
+
+/* Feature detection and fallbacks */
+@supports not (backdrop-filter: blur(1px)) {
+  .backdrop-blur-sm,
+  .backdrop-blur-md,
+  .backdrop-blur-enhanced,
+  .backdrop-blur-light {
+    background: rgba(255, 255, 255, 0.95) !important;
+  }
+
+  .glass-overlay {
+    background: rgba(0, 0, 0, 0.3) !important;
+  }
+}
+
+/* Ensure proper stacking context */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9998;
+}
+
+.modal-content {
+  position: fixed;
+  z-index: 9999;
+}
+
+/* Prevent body scroll when modals are open */
+body.modal-open {
+  overflow: hidden;
+}
+
+/* Smooth transitions for backdrop effects */
+.backdrop-transition {
+  transition:
+    backdrop-filter 0.3s ease-in-out,
+    background-color 0.3s ease-in-out;
+}
