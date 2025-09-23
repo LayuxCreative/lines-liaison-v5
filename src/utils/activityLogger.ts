@@ -28,7 +28,7 @@ export interface LoggerConfig {
 class ActivityLogger {
   private config: LoggerConfig = {
     enableConsoleLog: true,
-    enableDatabaseLog: true,
+    enableDatabaseLog: false, // Temporarily disabled to prevent login issues
     enableErrorTracking: true,
     maxRetries: 3,
     batchSize: 10,
@@ -50,39 +50,43 @@ class ActivityLogger {
   }
 
   private async flushLogs(): Promise<void> {
-    if (this.isProcessing || this.logQueue.length === 0) return;
+    if (this.isProcessing || this.logQueue.length === 0 || !this.config.enableDatabaseLog) return;
 
     this.isProcessing = true;
     const logsToProcess = this.logQueue.splice(0, this.config.batchSize);
 
     try {
-      if (this.config.enableDatabaseLog) {
-        await this.saveBatchToDatabase(logsToProcess);
-      }
+      await this.saveBatchToDatabase(logsToProcess);
     } catch (error) {
-      console.error('Failed to flush activity logs:', error);
-      // Re-add failed logs to queue for retry
-      this.logQueue.unshift(...logsToProcess);
+      console.warn('Failed to flush activity logs (non-blocking):', error);
+      // Don't re-add failed logs to prevent infinite retry loops
     } finally {
       this.isProcessing = false;
     }
   }
 
   private async saveBatchToDatabase(logs: ActivityLog[]): Promise<void> {
-    const { error } = await supabase
-      .from('activities')
-      .insert(logs.map(log => ({
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-        project_id: 'system',
-        user_id: log.user_id,
-        action: log.action,
-        description: log.details || log.action,
-        timestamp: log.timestamp || new Date().toISOString(),
-        metadata: log.metadata || {}
-      })));
+    if (!this.config.enableDatabaseLog) return;
 
-    if (error) {
-      throw new Error(`Database insert failed: ${error.message}`);
+    try {
+      const { error } = await supabase
+        .from('activities')
+        .insert(logs.map(log => ({
+          id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          project_id: log.project_id || 'system',
+          user_id: log.user_id || null,
+          action: log.action,
+          description: log.details || log.action,
+          timestamp: log.timestamp || new Date().toISOString(),
+          metadata: log.metadata || {}
+        })));
+
+      if (error) {
+        throw new Error(`Database insert failed: ${error.message}`);
+      }
+    } catch (error) {
+      // Log error but don't throw to prevent blocking other operations
+      console.warn('Activity logging failed:', error);
     }
   }
 
@@ -101,7 +105,7 @@ class ActivityLogger {
   private getBrowserInfo(): { ip_address?: string; user_agent?: string } {
     return {
       user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
-      ip_address: 'client' // Will be set by server if needed
+      ip_address: 'client'
     };
   }
 
@@ -128,23 +132,19 @@ class ActivityLogger {
         ...this.getBrowserInfo()
       };
 
-      // Console logging
+      // Console logging (always enabled for debugging)
       if (this.config.enableConsoleLog) {
         this.logToConsole(logEntry);
       }
 
-      // Add to queue for batch processing
+      // Add to queue for batch processing (only if database logging is enabled)
       if (this.config.enableDatabaseLog) {
         this.logQueue.push(logEntry);
       }
 
-      // Immediate flush for errors
-      if (status === 'error' && this.config.enableErrorTracking) {
-        await this.flushLogs();
-      }
-
     } catch (logError) {
-      console.error('Failed to create activity log:', logError);
+      // Don't throw errors from logging to prevent blocking main operations
+      console.warn('Failed to create activity log:', logError);
     }
   }
 
@@ -184,40 +184,52 @@ class ActivityLogger {
     return this.log(action, 'info', details, metadata);
   }
 
-  // Auth specific methods
+  // Auth specific methods (non-blocking)
   public async logLogin(userId: string, method: string = 'email'): Promise<void> {
-    const log: ActivityLog = {
-      id: `login_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      user_id: userId,
-      action: 'user_login',
-      details: `User logged in via ${method}`,
-      metadata: { login_method: method },
-      status: 'success',
-      timestamp: new Date().toISOString()
-    };
-    
-    this.logQueue.push(log);
-    
-    if (this.config.enableConsoleLog) {
-      this.logToConsole(log);
+    try {
+      const log: ActivityLog = {
+        id: `login_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        user_id: userId,
+        action: 'user_login',
+        details: `User logged in via ${method}`,
+        metadata: { login_method: method },
+        status: 'success',
+        timestamp: new Date().toISOString()
+      };
+      
+      if (this.config.enableConsoleLog) {
+        this.logToConsole(log);
+      }
+
+      if (this.config.enableDatabaseLog) {
+        this.logQueue.push(log);
+      }
+    } catch (error) {
+      console.warn('Login logging failed (non-blocking):', error);
     }
   }
 
   public async logLogout(userId?: string): Promise<void> {
-    const log: ActivityLog = {
-      id: `logout_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      user_id: userId,
-      action: 'user_logout',
-      details: 'User logged out',
-      metadata: {},
-      status: 'success',
-      timestamp: new Date().toISOString()
-    };
-    
-    this.logQueue.push(log);
-    
-    if (this.config.enableConsoleLog) {
-      this.logToConsole(log);
+    try {
+      const log: ActivityLog = {
+        id: `logout_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        user_id: userId,
+        action: 'user_logout',
+        details: 'User logged out',
+        metadata: {},
+        status: 'success',
+        timestamp: new Date().toISOString()
+      };
+      
+      if (this.config.enableConsoleLog) {
+        this.logToConsole(log);
+      }
+
+      if (this.config.enableDatabaseLog) {
+        this.logQueue.push(log);
+      }
+    } catch (error) {
+      console.warn('Logout logging failed (non-blocking):', error);
     }
   }
 
@@ -253,12 +265,22 @@ class ActivityLogger {
     this.config = { ...this.config, ...newConfig };
   }
 
+  public enableDatabaseLogging(): void {
+    this.config.enableDatabaseLog = true;
+  }
+
+  public disableDatabaseLogging(): void {
+    this.config.enableDatabaseLog = false;
+  }
+
   public getQueueSize(): number {
     return this.logQueue.length;
   }
 
   public async forceFlush(): Promise<void> {
-    await this.flushLogs();
+    if (this.config.enableDatabaseLog) {
+      await this.flushLogs();
+    }
   }
 
   public destroy(): void {
@@ -266,7 +288,7 @@ class ActivityLogger {
       clearInterval(this.flushTimer);
       this.flushTimer = null;
     }
-    this.flushLogs(); // Final flush
+    // Don't force flush on destroy to prevent blocking shutdown
   }
 }
 
