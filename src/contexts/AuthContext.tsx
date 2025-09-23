@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { User, UserStatusType } from "../types";
-import { supabase } from "../config/supabase";
+import { supabase, connectionManager } from "../config/unifiedSupabase";
 import type { Session, User as SupabaseUser } from "@supabase/supabase-js";
 import { supabaseService } from "../services/supabaseService";
+import { activityLogger } from "../utils/activityLogger";
 
 interface AuthContextType {
   user: User | null;
@@ -128,15 +129,32 @@ export const AuthProvider: React.FC<{
     let isMounted = true;
     setIsLoading(true);
 
-    const initializeAuth = async () => {
+    const initializeAuth = async (retryCount = 0) => {
       try {
+        // Initialize connection manager first
+        await connectionManager.initialize();
+
         // Skip token validation - let Supabase handle session management
 
-        // Get current session
-        const { data: { session }, error } = await supabase.auth.getSession();
+        // Get current session with extended timeout
+        const sessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Session fetch timeout')), 30000)
+        );
+        
+        const result = await Promise.race([sessionPromise, timeoutPromise]);
+        const { data: { session }, error } = result as { data: { session: Session | null }; error: Error | null };
         
         if (error) {
           console.error("AuthContext: Session error:", error);
+          
+          // Retry once on timeout or network error
+          if (retryCount < 1 && (error.message.includes('timeout') || error.message.includes('network'))) {
+            console.log("AuthContext: Retrying session fetch...");
+            setTimeout(() => initializeAuth(retryCount + 1), 2000);
+            return;
+          }
+          
           if (isMounted) {
             setSession(null);
             setUser(null);
@@ -177,7 +195,7 @@ export const AuthProvider: React.FC<{
     const timeoutId = setTimeout(() => {
       // console.log("AuthContext: Timeout reached, forcing loading to false");
       setIsLoading(false);
-    }, 5000);
+    }, 35000);
 
     initializeAuth();
 
@@ -290,17 +308,23 @@ export const AuthProvider: React.FC<{
             const convertedUser = await convertSupabaseUser(data.user, profile);
             setUser(convertedUser);
             console.log("AuthContext: User profile loaded successfully");
+            // Log successful login
+            await activityLogger.logLogin(data.user.id, 'email');
           } else {
             console.warn("AuthContext: No profile found for user");
             // Create basic user without profile
             const convertedUser = await convertSupabaseUser(data.user, null);
             setUser(convertedUser);
+            // Log successful login
+            await activityLogger.logLogin(data.user.id, 'email');
           }
         } catch (profileError) {
           console.error("AuthContext: Profile loading error:", profileError);
           // Still set basic user data even if profile fails
           const convertedUser = await convertSupabaseUser(data.user, null);
           setUser(convertedUser);
+          // Log successful login
+          await activityLogger.logLogin(data.user.id, 'email');
         }
         
         setIsLoading(false);
@@ -373,6 +397,11 @@ export const AuthProvider: React.FC<{
       // console.log("Starting logout process...");
       setIsLoading(true);
       
+      // Log logout before clearing user data
+      if (user) {
+        await activityLogger.logLogout(user.id);
+      }
+      
       // Clear user state immediately
       setUser(null);
       
@@ -401,7 +430,6 @@ export const AuthProvider: React.FC<{
       await supabase.auth.signOut();
       
       // console.log("Logout completed successfully");
-      return { success: true };
     } catch (error) {
       console.error("Logout error:", error);
       
@@ -548,10 +576,14 @@ export const AuthProvider: React.FC<{
   );
 };
 
-export const useAuth = () => {
+// Export hook with consistent naming for Fast Refresh compatibility
+export function useAuth() {
   const context = useContext(AuthContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
-};
+}
+
+// Add displayName for Fast Refresh compatibility
+useAuth.displayName = 'useAuth';

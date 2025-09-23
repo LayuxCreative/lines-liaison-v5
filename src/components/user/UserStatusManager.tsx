@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { User, UserStatusType } from "../../types";
+import { activityLogger } from "../../utils/activityLogger";
 
 interface UserStatusManagerProps {
   currentUser: User;
@@ -77,29 +78,54 @@ const UserStatusManager: React.FC<UserStatusManagerProps> = ({
     },
   ];
 
-  const handleStatusChange = (newStatus: UserStatusType) => {
-    // Store previous status for potential rollback
-    // const previousStatus = currentStatus;
-    setCurrentStatus(newStatus);
+  const handleStatusChange = async (newStatus: UserStatusType) => {
+    try {
+      // Log status change attempt
+      await activityLogger.log("user_status_change", "info", "User status change initiated", {
+        previousStatus: currentStatus,
+        newStatus,
+        customMessage: customMessage || undefined
+      });
 
-    // Add to history
-    const historyEntry: StatusHistory = {
-      id: Date.now().toString(),
-      status: newStatus,
-      timestamp: new Date(),
-      note: customMessage || undefined,
-    };
+      // Store previous status for potential rollback
+      // const previousStatus = currentStatus;
+      setCurrentStatus(newStatus);
 
-    setStatusHistory((prev) => [historyEntry, ...prev.slice(0, 9)]); // Keep last 10 entries
+      // Add to history
+      const historyEntry: StatusHistory = {
+        id: Date.now().toString(),
+        status: newStatus,
+        timestamp: new Date(),
+        note: customMessage || undefined,
+      };
 
-    if (onStatusUpdate) {
-      onStatusUpdate(newStatus);
-    }
+      setStatusHistory((prev) => [historyEntry, ...prev.slice(0, 9)]); // Keep last 10 entries
 
-    // Clear custom message after status change
-    if (customMessage) {
-      setCustomMessage("");
-      setShowCustomMessage(false);
+      if (onStatusUpdate) {
+        onStatusUpdate(newStatus);
+      }
+
+      // Log successful status change
+      await activityLogger.log("user_status_change", "success", "User status changed successfully", {
+        previousStatus: currentStatus,
+        newStatus,
+        customMessage: customMessage || undefined
+      });
+
+      // Clear custom message after status change
+      if (customMessage) {
+        setCustomMessage("");
+        setShowCustomMessage(false);
+      }
+    } catch (error) {
+      console.error('Error changing status:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to change status';
+      
+      await activityLogger.log("user_status_change", "error", "Failed to change user status", {
+        previousStatus: currentStatus,
+        newStatus,
+        error: errorMessage
+      });
     }
   };
 

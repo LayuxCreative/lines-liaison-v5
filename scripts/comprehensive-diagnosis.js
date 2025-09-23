@@ -137,8 +137,7 @@ try {
   const tests = [
     { table: 'profiles', name: 'Profiles' },
     { table: 'projects', name: 'Projects' },
-    { table: 'tasks', name: 'Tasks' },
-    { table: 'teams', name: 'Teams' }
+    { table: 'tasks', name: 'Tasks' }
   ];
   
   for (const test of tests) {
@@ -157,6 +156,24 @@ try {
     } catch (error) {
       console.log(`   ❌ ${test.name}: ${error.message}`);
     }
+  }
+  
+  // Test teams table separately (may have RLS restrictions)
+  try {
+    const start = performance.now();
+    const { data, error } = await supabase
+      .from('teams')
+      .select('id')
+      .limit(1);
+    const end = performance.now();
+    
+    if (error) {
+      console.log(`   ❌ Teams: ${error.message}`);
+    } else {
+      console.log(`   ✅ Teams: ${data?.length || 0} records (${Math.round(end - start)}ms)`);
+    }
+  } catch (error) {
+    console.log(`   ❌ Teams: ${error.message}`);
   }
 } catch (error) {
   console.log(`   ❌ Database Error: ${error.message}`);

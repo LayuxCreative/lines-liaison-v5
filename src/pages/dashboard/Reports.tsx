@@ -1,123 +1,197 @@
-import React, { useState } from "react";
-import { motion } from "framer-motion";
-import {
-  FileText,
-  Download,
-  Eye,
-  Search,
-  BarChart3,
-  TrendingUp,
-  CheckCircle,
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { 
+  Calendar, 
+  Filter, 
+  Download, 
+  Search, 
+  User, 
+  Activity,
   Clock,
   AlertCircle,
-} from "lucide-react";
-import { useAuth } from "../../contexts/AuthContext";
-import { useData } from "../../contexts/DataContext";
+  CheckCircle,
+  Info,
+  XCircle,
+  BarChart3,
+  TrendingUp,
+  Users
+} from 'lucide-react';
+import { supabaseService } from '../../services/supabaseService';
+
+interface ActivityRecord {
+  id: string;
+  project_id: string;
+  user_id: string;
+  action: string;
+  description: string;
+  timestamp: string;
+  metadata: Record<string, any>;
+}
+
+interface FilterOptions {
+  dateFrom: string;
+  dateTo: string;
+  action: string;
+  userId: string;
+  search: string;
+}
 
 const Reports: React.FC = () => {
-  const { user } = useAuth();
-  const { getProjectsByUser } = useData();
-  const [selectedProject, setSelectedProject] = useState<string>("all");
-  const [reportType, setReportType] = useState<string>("all");
-  const [searchTerm, setSearchTerm] = useState("");
-
-  if (!user) return null;
-
-  const userProjects = getProjectsByUser(user.id, user.role);
-
-  // Reports will be loaded from Supabase via DataContext
-  const reports: Array<{
-    id: string;
-    title: string;
-    type: string;
-    status: string;
-    projectId: string;
-    projectName: string;
-    description: string;
-    generatedBy: string;
-    generatedAt: Date;
-    fileSize: string;
-    pages: number;
-  }> = [];
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "published":
-        return CheckCircle;
-      case "review":
-        return Clock;
-      case "draft":
-        return AlertCircle;
-      default:
-        return FileText;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "published":
-        return "bg-green-100 text-green-800";
-      case "review":
-        return "bg-yellow-100 text-yellow-800";
-      case "draft":
-        return "bg-gray-100 text-gray-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
-
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case "progress":
-        return TrendingUp;
-      case "financial":
-        return BarChart3;
-      case "technical":
-        return FileText;
-      case "milestone":
-        return CheckCircle;
-      case "final":
-        return FileText;
-      default:
-        return FileText;
-    }
-  };
-
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case "progress":
-        return "from-blue-500 to-blue-600";
-      case "financial":
-        return "from-green-500 to-green-600";
-      case "technical":
-        return "from-purple-500 to-purple-600";
-      case "milestone":
-        return "from-orange-500 to-orange-600";
-      case "final":
-        return "from-red-500 to-red-600";
-      default:
-        return "from-gray-500 to-gray-600";
-    }
-  };
-
-  const filteredReports = reports.filter((report) => {
-    const matchesProject =
-      selectedProject === "all" || report.projectId === selectedProject;
-    const matchesType = reportType === "all" || report.type === reportType;
-    const matchesSearch =
-      report.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      report.description.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesProject && matchesType && matchesSearch;
+  const [activities, setActivities] = useState<ActivityRecord[]>([]);
+  const [filteredActivities, setFilteredActivities] = useState<ActivityRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filters, setFilters] = useState<FilterOptions>({
+    dateFrom: '',
+    dateTo: '',
+    action: '',
+    userId: '',
+    search: ''
   });
 
-  const reportTypes = [
-    { value: "all", label: "All Types" },
-    { value: "progress", label: "Progress Reports" },
-    { value: "financial", label: "Financial Reports" },
-    { value: "technical", label: "Technical Reports" },
-    { value: "milestone", label: "Milestone Reports" },
-    { value: "final", label: "Final Reports" },
+  const actionTypes = [
+    'user_login',
+    'user_logout',
+    'project_created',
+    'project_updated',
+    'task_created',
+    'task_updated',
+    'file_uploaded',
+    'comment_added'
   ];
+
+  useEffect(() => {
+    fetchActivities();
+  }, []);
+
+  useEffect(() => {
+    applyFilters();
+  }, [activities, filters]);
+
+  const fetchActivities = async () => {
+     try {
+       setLoading(true);
+       const data = await supabaseService.getActivities();
+       setActivities((data as ActivityRecord[]) || []);
+     } catch (error) {
+       console.error('Error fetching activities:', error);
+     } finally {
+       setLoading(false);
+     }
+   };
+
+  const applyFilters = () => {
+    let filtered = [...activities];
+
+    // Date filter
+    if (filters.dateFrom) {
+      filtered = filtered.filter(activity => 
+        new Date(activity.timestamp) >= new Date(filters.dateFrom)
+      );
+    }
+
+    if (filters.dateTo) {
+      filtered = filtered.filter(activity => 
+        new Date(activity.timestamp) <= new Date(filters.dateTo)
+      );
+    }
+
+    // Action filter
+    if (filters.action) {
+      filtered = filtered.filter(activity => 
+        activity.action === filters.action
+      );
+    }
+
+    // User filter
+    if (filters.userId) {
+      filtered = filtered.filter(activity => 
+        activity.user_id?.includes(filters.userId)
+      );
+    }
+
+    // Search filter
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase();
+      filtered = filtered.filter(activity => 
+        activity.description.toLowerCase().includes(searchLower) ||
+        activity.action.toLowerCase().includes(searchLower)
+      );
+    }
+
+    setFilteredActivities(filtered);
+  };
+
+  const handleFilterChange = (key: keyof FilterOptions, value: string) => {
+    setFilters(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      dateFrom: '',
+      dateTo: '',
+      action: '',
+      userId: '',
+      search: ''
+    });
+  };
+
+  const exportToCSV = () => {
+    const csvContent = [
+      ['Date', 'User ID', 'Action', 'Description'],
+      ...filteredActivities.map(activity => [
+        new Date(activity.timestamp).toLocaleDateString(),
+        activity.user_id,
+        activity.action,
+        activity.description
+      ])
+    ].map(row => row.join(',')).join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `activities-report-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const getActionIcon = (action: string) => {
+    switch (action) {
+      case 'user_login':
+        return <CheckCircle className="w-4 h-4 text-green-500" />;
+      case 'user_logout':
+        return <XCircle className="w-4 h-4 text-red-500" />;
+      case 'error':
+        return <AlertCircle className="w-4 h-4 text-red-500" />;
+      case 'warning':
+        return <AlertCircle className="w-4 h-4 text-yellow-500" />;
+      default:
+        return <Info className="w-4 h-4 text-blue-500" />;
+    }
+  };
+
+  const formatTimestamp = (timestamp: string) => {
+    return new Date(timestamp).toLocaleString('ar-SA', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  // Calculate stats
+  const totalActivities = activities.length;
+  const uniqueUsers = new Set(activities.map(a => a.user_id)).size;
+  const todayActivities = activities.filter(a => 
+    new Date(a.timestamp).toDateString() === new Date().toDateString()
+  ).length;
+  const loginCount = activities.filter(a => a.action === 'user_login').length;
+
+
 
   return (
     <div className="min-h-screen bg-gray-50 pt-16">
@@ -126,184 +200,243 @@ const Reports: React.FC = () => {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
           className="mb-8"
         >
-          <h1 className="text-3xl font-bold text-gray-900">Reports</h1>
-          <p className="text-gray-600 mt-2">
-            Access and download project reports and documentation
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Activity Reports</h1>
+          <p className="text-gray-600">
+            Monitor and analyze system activities and user interactions
           </p>
+        </motion.div>
+
+        {/* Stats Cards */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"
+        >
+          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 text-sm">Total Activities</p>
+                <p className="text-3xl font-bold text-gray-900">{activities.length}</p>
+              </div>
+              <Activity className="w-8 h-8 text-blue-600" />
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 text-sm">Today's Activities</p>
+                <p className="text-3xl font-bold text-gray-900">{todayActivities}</p>
+              </div>
+              <TrendingUp className="w-8 h-8 text-green-600" />
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 text-sm">Active Users</p>
+                <p className="text-3xl font-bold text-gray-900">{uniqueUsers}</p>
+              </div>
+              <Users className="w-8 h-8 text-purple-600" />
+            </div>
+          </div>
         </motion.div>
 
         {/* Filters */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 0.6 }}
+          transition={{ delay: 0.2 }}
           className="bg-white rounded-xl shadow-lg p-6 mb-8"
         >
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            {/* Date From */}
+            <div className="relative">
+              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="date"
+                value={filters.dateFrom}
+                onChange={(e) => setFilters(prev => ({ ...prev, dateFrom: e.target.value }))}
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+              />
+            </div>
+
+            {/* Date To */}
+            <div className="relative">
+              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="date"
+                value={filters.dateTo}
+                onChange={(e) => setFilters(prev => ({ ...prev, dateTo: e.target.value }))}
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+              />
+            </div>
+
             {/* Search */}
-            <div className="md:col-span-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="text"
-                  placeholder="Search reports..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                />
-              </div>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Search activities..."
+                value={filters.search}
+                onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+              />
             </div>
 
-            {/* Project Filter */}
-            <div>
+            {/* Action Filter */}
+            <div className="relative">
+              <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <select
-                value={selectedProject}
-                onChange={(e) => setSelectedProject(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                value={filters.action}
+                onChange={(e) => setFilters(prev => ({ ...prev, action: e.target.value }))}
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
               >
-                <option value="all">All Projects</option>
-                {userProjects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
+                <option value="">All Actions</option>
+                {actionTypes.map(action => (
+                  <option key={action} value={action}>
+                    {action.replace('_', ' ').toUpperCase()}
                   </option>
                 ))}
               </select>
             </div>
 
-            {/* Type Filter */}
-            <div>
-              <select
-                value={reportType}
-                onChange={(e) => setReportType(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-              >
-                {reportTypes.map((type) => (
-                  <option key={type.value} value={type.value}>
-                    {type.label}
-                  </option>
-                ))}
-              </select>
+            {/* User ID */}
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="User ID..."
+                value={filters.userId}
+                onChange={(e) => setFilters(prev => ({ ...prev, userId: e.target.value }))}
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+              />
+            </div>
+          </div>
+
+          {/* Export Button */}
+          <div className="flex justify-between items-center mt-6">
+            <button
+              onClick={exportToCSV}
+              className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-teal-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-teal-700 transition-all duration-300 transform hover:scale-105"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export CSV
+            </button>
+            
+            <div className="text-gray-600 text-sm">
+              Showing <span className="font-semibold">{filteredActivities.length}</span> of{' '}
+              <span className="font-semibold">{activities.length}</span> activities
+            </div>
+            <div className="text-gray-600 text-sm">
+              Last updated: {new Date().toLocaleTimeString()}
             </div>
           </div>
         </motion.div>
 
-        {/* Reports Grid */}
-        {filteredReports.length > 0 ? (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4, duration: 0.6 }}
-            className="grid grid-cols-1 lg:grid-cols-2 gap-6"
-          >
-            {filteredReports.map((report, index) => {
-              const StatusIcon = getStatusIcon(report.status);
-              const TypeIcon = getTypeIcon(report.type);
-
-              return (
-                <motion.div
-                  key={report.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 * index, duration: 0.6 }}
-                  className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden"
-                >
-                  <div className="p-6">
-                    {/* Header */}
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-start space-x-4">
-                        <div
-                          className={`w-12 h-12 bg-gradient-to-br ${getTypeColor(report.type)} rounded-lg flex items-center justify-center`}
-                        >
-                          <TypeIcon className="w-6 h-6 text-white" />
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                            {report.title}
-                          </h3>
-                          <p className="text-sm text-gray-600">
-                            {report.projectName}
-                          </p>
-                        </div>
-                      </div>
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(report.status)}`}
-                      >
-                        {report.status.toUpperCase()}
-                      </span>
-                    </div>
-
-                    {/* Description */}
-                    <p className="text-gray-600 text-sm mb-4 line-clamp-2">
-                      {report.description}
-                    </p>
-
-                    {/* Metadata */}
-                    <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
-                      <div>
-                        <p className="text-gray-500">Generated By</p>
-                        <p className="font-medium text-gray-900">
-                          {report.generatedBy}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-gray-500">Date</p>
-                        <p className="font-medium text-gray-900">
-                          {report.generatedAt.toLocaleDateString()}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-gray-500">File Size</p>
-                        <p className="font-medium text-gray-900">
-                          {report.fileSize}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-gray-500">Pages</p>
-                        <p className="font-medium text-gray-900">
-                          {report.pages}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex items-center space-x-3">
-                      <button className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors">
-                        <Eye className="w-4 h-4" />
-                        <span>View</span>
-                      </button>
-                      <button className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors">
-                        <Download className="w-4 h-4" />
-                        <span>Download</span>
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </motion.div>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4, duration: 0.6 }}
-            className="text-center py-12"
-          >
-            <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <FileText className="w-12 h-12 text-gray-400" />
+        {/* Results Summary */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white/10 backdrop-blur-lg rounded-xl p-4 mb-6 border border-white/20"
+        >
+          <div className="flex items-center justify-between">
+            <div className="text-white">
+              Showing <span className="font-semibold">{filteredActivities.length}</span> of{' '}
+              <span className="font-semibold">{activities.length}</span> activities
             </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
-              No reports found
-            </h3>
-            <p className="text-gray-600">
-              {searchTerm || selectedProject !== "all" || reportType !== "all"
-                ? "Try adjusting your search or filter criteria."
-                : "Reports will appear here once they are generated for your projects."}
-            </p>
-          </motion.div>
-        )}
+            <div className="text-slate-300 text-sm">
+              Last updated: {new Date().toLocaleTimeString()}
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Activities Table */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="bg-white rounded-xl shadow-lg overflow-hidden"
+        >
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Timestamp
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      User ID
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Action
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Description
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Project ID
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredActivities.map((activity, index) => (
+                    <motion.tr
+                      key={activity.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className="hover:bg-gray-50 transition-colors"
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {new Date(activity.timestamp).toLocaleString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        {activity.user_id}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          activity.action === 'login' ? 'bg-green-100 text-green-800' :
+                          activity.action === 'logout' ? 'bg-red-100 text-red-800' :
+                          activity.action === 'project_created' ? 'bg-blue-100 text-blue-800' :
+                          activity.action === 'project_updated' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {activity.action.replace('_', ' ').toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">
+                        {activity.description}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        {activity.project_id || 'N/A'}
+                      </td>
+                    </motion.tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {filteredActivities.length === 0 && !loading && (
+                <div className="text-center py-12">
+                  <Activity className="mx-auto h-12 w-12 text-gray-400" />
+                  <h3 className="mt-2 text-sm font-medium text-gray-900">No activities found</h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Try adjusting your filters to see more results.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </motion.div>
       </div>
     </div>
   );

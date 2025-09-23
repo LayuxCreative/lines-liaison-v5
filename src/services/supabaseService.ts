@@ -1,5 +1,6 @@
-import { supabase } from "../config/supabase";
+import { supabase } from "../config/unifiedSupabase";
 import { User, Project, Task, Message, PermissionGroup, Role, PermissionItem, EnhancedNotification } from "../types";
+import { activityLogger } from "../utils/activityLogger";
 
 // Enhanced error handling for Supabase operations
 class SupabaseError extends Error {
@@ -30,8 +31,8 @@ const serviceState: ServiceConnectionState = {
 };
 
 // Circuit breaker pattern implementation
-const CIRCUIT_BREAKER_THRESHOLD = 5;
-const CIRCUIT_BREAKER_TIMEOUT = 30000; // 30 seconds
+const CIRCUIT_BREAKER_THRESHOLD = 3; // Reduced threshold for faster recovery
+const CIRCUIT_BREAKER_TIMEOUT = 15000; // Reduced to 15 seconds for faster recovery
 
 // Enhanced retry mechanism for network operations
 class RetryHandler {
@@ -175,10 +176,8 @@ class SupabaseService {
   async checkHealth(): Promise<boolean> {
     try {
       const startTime = Date.now();
-      await handleSupabaseResponse(
-        () => this.supabase.from('profiles').select('id').limit(1),
-        'health_check'
-      );
+      const result = await this.supabase.from('profiles').select('id').limit(1);
+      await handleSupabaseResponse(() => Promise.resolve(result), 'health_check');
       logOperation('health_check', startTime);
       return true;
     } catch (error) {
@@ -196,10 +195,12 @@ class SupabaseService {
   async getUsers(): Promise<User[]> {
     return RetryHandler.withRetry(async () => {
       console.log('🔄 Starting to fetch users from Supabase...');
+      await activityLogger.log('database_query', 'info', 'get_users', { table: 'profiles' });
       const { data, error } = await this.supabase.from("profiles").select("*");
 
       if (error) {
         console.error('❌ Error fetching users:', error);
+        await activityLogger.log('database_query_error', 'error', 'get_users', { error: error.message });
         throw error;
       }
       
@@ -213,6 +214,7 @@ class SupabaseService {
         additionalPermissions: user.additional_permissions || user.additionalPermissions || []
       })) || [];
       
+      await activityLogger.log('database_query_success', 'success', 'get_users', { count: mappedData.length });
       return mappedData;
     }, 3, 1000, 'getUsers');
   }
@@ -863,54 +865,106 @@ class SupabaseService {
   }
 
   static async createTask(task: Omit<Task, "id" | "createdAt">): Promise<Task> {
-    const { data, error } = await supabase
-      .from("tasks")
-      .insert({
-        title: task.title,
-        description: task.description,
-        status: task.status,
+    try {
+      await activityLogger.log("task_create", "info", "Creating new task", {
+        projectId: task.projectId,
+        taskTitle: task.title,
         priority: task.priority,
-        project_id: task.projectId,
-        assignee_id: task.assigneeId,
-        due_date: task.dueDate,
-        created_by: task.createdBy,
-      })
-      .select(
-        `
-        *,
-        assignee:profiles(id, name, avatar),
-        project:projects(id, name)
-      `,
-      )
-      .single();
+        assigneeId: task.assigneeId,
+        createdBy: task.createdBy
+      });
 
-    if (error) throw error;
-    return data;
+      const { data, error } = await supabase
+        .from("tasks")
+        .insert({
+          title: task.title,
+          description: task.description,
+          status: task.status,
+          priority: task.priority,
+          project_id: task.projectId,
+          assignee_id: task.assigneeId,
+          due_date: task.dueDate,
+          created_by: task.createdBy,
+        })
+        .select(
+          `
+          *,
+          assignee:profiles(id, name, avatar),
+          project:projects(id, name)
+        `,
+        )
+        .single();
+
+      if (error) throw error;
+
+      await activityLogger.log("task_create", "success", "Task created successfully", {
+        taskId: data.id,
+        projectId: task.projectId,
+        taskTitle: task.title,
+        assigneeId: task.assigneeId
+      });
+
+      return data;
+    } catch (error) {
+      await activityLogger.log("task_create", "error", "Failed to create task", {
+        projectId: task.projectId,
+        taskTitle: task.title,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+      throw error;
+    }
   }
 
   static async updateTask(id: string, updates: Partial<Task>): Promise<Task> {
-    const { data, error } = await supabase
-      .from("tasks")
-      .update({
-        title: updates.title,
-        description: updates.description,
-        status: updates.status,
-        priority: updates.priority,
-        assignee_id: updates.assigneeId,
-        due_date: updates.dueDate,
-      })
-      .eq("id", id)
-      .select(
-        `
-        *,
-        assignee:profiles(id, name, avatar),
-        project:projects(id, name)
-      `,
-      )
-      .single();
+    try {
+      const updatedFields = Object.keys(updates);
+      await activityLogger.log("task_update", "info", "Updating task", {
+        taskId: id,
+        updatedFields,
+        updates: {
+          title: updates.title,
+          status: updates.status,
+          priority: updates.priority,
+          assigneeId: updates.assigneeId
+        }
+      });
 
-    if (error) throw error;
-    return data;
+      const { data, error } = await supabase
+        .from("tasks")
+        .update({
+          title: updates.title,
+          description: updates.description,
+          status: updates.status,
+          priority: updates.priority,
+          assignee_id: updates.assigneeId,
+          due_date: updates.dueDate,
+        })
+        .eq("id", id)
+        .select(
+          `
+          *,
+          assignee:profiles(id, name, avatar),
+          project:projects(id, name)
+        `,
+        )
+        .single();
+
+      if (error) throw error;
+
+      await activityLogger.log("task_update", "success", "Task updated successfully", {
+        taskId: id,
+        updatedFields,
+        taskTitle: data.title
+      });
+
+      return data;
+    } catch (error) {
+      await activityLogger.log("task_update", "error", "Failed to update task", {
+        taskId: id,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+      throw error;
+    }
   }
 
   // Notification operations
@@ -1040,30 +1094,60 @@ class SupabaseService {
 
   // Activity operations
   async getActivities(): Promise<unknown[]> {
+    // Check circuit breaker before attempting request
+    if (serviceState.circuitBreakerOpen) {
+      console.log('🚫 Circuit breaker is open, skipping activities request');
+      return [];
+    }
+
     return RetryHandler.withRetry(async () => {
       console.log('🔄 Starting to fetch activities from Supabase...');
       
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        
         const { data, error } = await this.supabase
           .from("activities")
           .select("*")
           .order("timestamp", { ascending: false })
-          .limit(50);
+          .limit(50)
+          .abortSignal(controller.signal);
+
+        clearTimeout(timeoutId);
 
         if (error) {
           console.error('❌ Error fetching activities:', error);
-          // Return empty array instead of throwing for better UX
+          serviceState.consecutiveFailures++;
+          if (serviceState.consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) {
+            serviceState.circuitBreakerOpen = true;
+            setTimeout(() => {
+              serviceState.circuitBreakerOpen = false;
+              serviceState.consecutiveFailures = 0;
+            }, CIRCUIT_BREAKER_TIMEOUT);
+          }
           return [];
         }
+
+        // Reset failure count on success
+        serviceState.consecutiveFailures = 0;
+        serviceState.lastSuccessfulOperation = new Date();
+        serviceState.isHealthy = true;
 
         console.log('✅ Successfully fetched activities:', data?.length || 0);
         return data || [];
       } catch (networkError) {
         console.error('❌ Network error fetching activities:', networkError);
-        // Return empty array for network errors
+        serviceState.consecutiveFailures++;
+        
+        // Handle abort errors specifically
+        if (networkError instanceof Error && networkError.name === 'AbortError') {
+          console.log('🚫 Request was aborted - likely due to component unmount');
+        }
+        
         return [];
       }
-    }, 3, 1000, 'getActivities');
+    }, 2, 1500, 'getActivities'); // Reduced retries and increased delay
   }
 
   // Unsubscribe from realtime updates

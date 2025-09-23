@@ -53,7 +53,7 @@ export class SocketService {
   private maxReconnectDelay = 30000; // Maximum delay of 30 seconds
   private reconnectBackoffFactor = 1.5; // Exponential backoff factor
 
-  constructor(serverUrl: string = "http://localhost:3001") {
+  constructor(serverUrl: string = "") {
     this.serverUrl = serverUrl;
   }
 

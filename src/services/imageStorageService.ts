@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabase';
+import { supabase } from '../config/unifiedSupabase';
 import { UnsplashImage } from './unsplashService';
 
 interface UploadResult {
@@ -78,9 +78,9 @@ class ImageStorageService {
       // Create a unique filename
       const fileName = `unsplash_${image.id}_${Date.now()}.jpg`;
       
-      // Upload to Supabase
+      // Upload to Supabase using consistent bucket
       const { error } = await supabase.storage
-        .from('user-images')
+        .from(this.bucketName)
         .upload(`${userId}/${fileName}`, blob, {
           contentType: 'image/jpeg',
           upsert: false
@@ -93,7 +93,7 @@ class ImageStorageService {
       
       // Get public URL
       const { data: urlData } = supabase.storage
-        .from('user-images')
+        .from(this.bucketName)
         .getPublicUrl(`${userId}/${fileName}`);
 
       return {

@@ -1,5 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import fetchRetry from 'fetch-retry';
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 
 // Enhanced connection test with all improvements
 const supabaseUrl = process.env.VITE_SUPABASE_URL;

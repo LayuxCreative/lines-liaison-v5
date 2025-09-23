@@ -1,7 +1,8 @@
-import { supabase } from "../config/supabase";
-import { getBucketName } from "../config/supabaseConfig";
+import { supabase } from "../config/unifiedSupabase";
+import { getStorageBucket } from "../config/supabaseConfig";
 import { STORAGE_QUERIES } from "../config/supabaseSchema";
 import { v4 as uuidv4 } from "uuid";
+import { activityLogger } from "../utils/activityLogger";
 
 export interface StorageFile {
   id: string;
@@ -38,7 +39,7 @@ export interface UploadOptions {
 }
 
 class SupabaseStorageService {
-  private readonly BUCKET_NAME = getBucketName();
+  private readonly BUCKET_NAME = getStorageBucket();
 
   /**
    * Upload a file to Supabase Storage
@@ -49,6 +50,13 @@ class SupabaseStorageService {
     onProgress?: (progress: UploadProgress) => void,
   ): Promise<StorageFile> {
     try {
+      await activityLogger.log("file_upload", "info", "Starting file upload to storage", {
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+        projectId
+      });
+
       // Generate unique file path
       const fileId = uuidv4();
       const fileExtension = file.name.split(".").pop();
@@ -103,11 +111,23 @@ class SupabaseStorageService {
 
       if (dbError) {
         // If database insert fails, clean up the uploaded file
-        await this.deleteFile(filePath);
+        try {
+          await supabase.storage.from(this.BUCKET_NAME).remove([filePath]);
+        } catch (cleanupError) {
+          console.warn('Failed to cleanup uploaded file after database error:', cleanupError);
+        }
         throw new Error(`Database error: ${dbError.message}`);
       }
 
       onProgress?.({ progress: 100, status: "completed" });
+
+      await activityLogger.log("file_upload", "success", "File uploaded to storage successfully", {
+        fileId,
+        fileName: file.name,
+        fileSize: file.size,
+        projectId,
+        filePath
+      });
 
       return {
         id: fileId,
@@ -122,6 +142,14 @@ class SupabaseStorageService {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Upload failed";
+      
+      await activityLogger.log("file_upload", "error", "File upload to storage failed", {
+        fileName: file.name,
+        fileSize: file.size,
+        projectId,
+        error: errorMessage
+      });
+
       onProgress?.({ progress: 0, status: "error", error: errorMessage });
       throw error;
     }
@@ -165,18 +193,50 @@ class SupabaseStorageService {
    */
   async deleteFile(fileName: string): Promise<{ success: boolean; error?: string }> {
     try {
+      await activityLogger.log("file_delete", "info", "Starting file deletion from storage", {
+        fileName
+      });
+
+      // Check if file exists first
+      const { data: fileExists } = await supabase.storage
+        .from(this.BUCKET_NAME)
+        .list('', { search: fileName });
+
+      if (!fileExists || fileExists.length === 0) {
+        await activityLogger.log("file_delete", "warning", "File not found in storage", {
+          fileName
+        });
+        return { success: true }; // Consider it successful if file doesn't exist
+      }
+
       const { error } = await supabase.storage
         .from(this.BUCKET_NAME)
         .remove([fileName]);
 
       if (error) {
         console.error('Error deleting file:', error);
+        
+        await activityLogger.log("file_delete", "error", "File deletion from storage failed", {
+          fileName,
+          error: error.message
+        });
+
         return { success: false, error: error.message };
       }
+
+      await activityLogger.log("file_delete", "success", "File deleted from storage successfully", {
+        fileName
+      });
 
       return { success: true };
     } catch (error) {
       console.error('Error deleting file:', error);
+      
+      await activityLogger.log("file_delete", "error", "File deletion from storage failed", {
+        fileName,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+
       return { success: false, error: 'Failed to delete file' };
     }
   }

@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { Activity } from "../types";
-import { supabase } from "../config/supabase";
+import { supabase } from "../config/unifiedSupabase";
 import supabaseService from "../services/supabaseService";
+import { useAuth } from "./AuthContext";
 
 interface ActivityContextType {
   activities: Activity[];
@@ -16,10 +17,16 @@ export const ActivityProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const { user } = useAuth();
 
-  // Load activities from Supabase with optimization
+  // Load activities from Supabase with enhanced error handling
   const loadActivities = async () => {
+    if (!user) {
+      setActivities([]);
+      return;
+    }
+
     try {
       setIsLoading(true);
       
@@ -45,21 +52,32 @@ export const ActivityProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     } catch (error) {
       console.error('Error loading activities:', error);
+      // Don't throw error, just set empty array for better UX
       setActivities([]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Load activities with delay to improve initial load time
+  // Load activities immediately when user is available
   useEffect(() => {
-    // Delay loading activities to prioritize other essential data
-    const timer = setTimeout(() => {
-      loadActivities();
-    }, 500);
+    let isMounted = true;
     
-    return () => clearTimeout(timer);
-  }, []);
+    // Only load activities if user is logged in
+    if (user) {
+      loadActivities().then(() => {
+        if (!isMounted) {
+          console.log('Component unmounted, skipping activity update');
+        }
+      });
+    } else {
+      setActivities([]);
+    }
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
 
   const addActivity = async (activity: Omit<Activity, "id" | "timestamp">) => {
     const newActivity: Activity = {

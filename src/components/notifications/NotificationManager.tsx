@@ -230,17 +230,38 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
   useEffect(() => {
     if (!user) return;
 
-    try {
-      // DISABLED: Realtime subscription for notifications to prevent ChannelRateLimitReached
-      console.warn('Realtime notifications subscription is temporarily disabled');
-      
-      // Cleanup subscription on unmount
-      return () => {
-        // No cleanup needed since subscription is disabled
-      };
-    } catch (subscriptionError) {
-      console.warn('Realtime subscription disabled:', subscriptionError);
-    }
+    let subscription: any = null;
+
+    const setupSubscription = async () => {
+      try {
+        subscription = await supabaseService.subscribeToNotifications(
+          user.id,
+          (payload: any) => {
+            if (payload.eventType === 'INSERT') {
+              const newNotification = payload.new as Notification;
+              dispatch({ type: 'ADD_NOTIFICATION', payload: newNotification });
+            } else if (payload.eventType === 'UPDATE') {
+              const updatedNotification = payload.new as Notification;
+              dispatch({ type: 'UPDATE_NOTIFICATION', payload: updatedNotification });
+            } else if (payload.eventType === 'DELETE') {
+              const deletedNotification = payload.old as Notification;
+              dispatch({ type: 'DELETE_NOTIFICATION', payload: { id: deletedNotification.id } });
+            }
+          }
+        );
+      } catch (subscriptionError) {
+        console.warn('Realtime subscription error:', subscriptionError);
+      }
+    };
+
+    setupSubscription();
+
+    // Cleanup subscription on unmount
+    return () => {
+      if (subscription) {
+        supabaseService.unsubscribe(subscription);
+      }
+    };
   }, [user]);
 
   const value = {

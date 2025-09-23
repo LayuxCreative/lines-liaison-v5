@@ -1,16 +1,23 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import {
+  MessageSquare,
   Send,
   Search,
-  Paperclip,
+  Filter,
+  MoreVertical,
   Phone,
   Video,
-  MoreVertical,
+  Paperclip,
+  Smile,
+  Users,
+  Clock,
+  CheckCircle2,
   User,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useData } from "../../contexts/DataContext";
+import { activityLogger } from "../../utils/activityLogger";
 
 const Communication: React.FC = () => {
   const { user } = useAuth();
@@ -44,11 +51,28 @@ const Communication: React.FC = () => {
     return matchesProject && matchesSearch;
   });
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (messageText.trim()) {
-      // Handle message sending logic here
-      console.log("Sending message:", messageText);
-      setMessageText("");
+      try {
+        await activityLogger.log("communication_message_send", "info", "Sending communication message", {
+          selectedProject,
+          messageLength: messageText.trim().length
+        });
+        
+        // Handle message sending logic here
+        console.log("Sending message:", messageText);
+        setMessageText("");
+        
+        await activityLogger.log("communication_message_send", "success", "Communication message sent successfully", {
+          selectedProject
+        });
+      } catch (error) {
+        console.error("Error sending message:", error);
+        await activityLogger.log("communication_message_send", "error", "Failed to send communication message", {
+          selectedProject,
+          error: error instanceof Error ? error.message : "Unknown error"
+        });
+      }
     }
   };
 

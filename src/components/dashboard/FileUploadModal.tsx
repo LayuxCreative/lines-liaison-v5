@@ -12,6 +12,7 @@ import {
 import { useAuth } from "../../contexts/AuthContext";
 import { useData } from "../../contexts/DataContext";
 import { useNotifications } from "../../contexts/NotificationContext";
+import { activityLogger } from "../../utils/activityLogger";
 import FileDisplayFooter from "./FileDisplayFooter";
 
 interface FileUploadModalProps {
@@ -103,6 +104,14 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
       const { file, id } = uploadFile;
 
       try {
+        await activityLogger.log("file_upload", "info", "Starting file upload", {
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type,
+          projectId: selectedProject,
+          userId: user?.id
+        });
+
         // Simulate upload progress
         for (let progress = 0; progress <= 100; progress += 10) {
           await new Promise((resolve) => setTimeout(resolve, 100));
@@ -153,6 +162,13 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
           ),
         );
 
+        await activityLogger.log("file_upload", "success", "File uploaded successfully", {
+          fileName: file.name,
+          fileSize: file.size,
+          projectId: selectedProject,
+          userId: user?.id
+        });
+
         const uploadedFileData = {
           id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
           name: file.name,
@@ -185,6 +201,16 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
           onFileUploaded(uploadedFileData);
         }
       } catch (error) {
+        console.error("Upload failed:", error);
+
+        await activityLogger.log("file_upload", "error", "File upload failed", {
+          fileName: file.name,
+          fileSize: file.size,
+          projectId: selectedProject,
+          userId: user?.id,
+          error: error instanceof Error ? error.message : "Unknown error"
+        });
+
         setUploadFiles((prev) =>
           prev.map((uf) =>
             uf.id === id

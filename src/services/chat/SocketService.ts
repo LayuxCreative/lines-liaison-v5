@@ -60,6 +60,12 @@ class SocketService {
       try {
         this.currentUser = user;
         
+        // Disconnect existing connection if any
+        if (this.socket) {
+          this.socket.disconnect();
+          this.socket = null;
+        }
+        
         this.socket = io(serverUrl, {
           auth: {
             userId: user.id,
@@ -67,11 +73,25 @@ class SocketService {
             userEmail: user.email
           },
           transports: ['websocket', 'polling'],
-          timeout: 10000,
-          forceNew: true
+          timeout: 20000, // Increased timeout
+          forceNew: true,
+          reconnection: true,
+          reconnectionAttempts: 5,
+          reconnectionDelay: 1000,
+          reconnectionDelayMax: 5000,
+          pingTimeout: 60000,
+          pingInterval: 25000
         });
 
+        // Set up connection timeout
+        const connectionTimeout = setTimeout(() => {
+          console.error('Connection timeout after 20 seconds');
+          this.socket?.disconnect();
+          reject(new Error('Connection timeout'));
+        }, 20000);
+
         this.socket.on('connect', () => {
+          clearTimeout(connectionTimeout);
           console.log('Connected to chat server');
           this.reconnectAttempts = 0;
           this.emit('connected');
@@ -79,16 +99,26 @@ class SocketService {
         });
 
         this.socket.on('connect_error', (error) => {
+          clearTimeout(connectionTimeout);
           console.error('Connection error:', error);
           this.emit('connectionError', error);
-          reject(error);
+          
+          // Try fallback connection with polling only
+          if (this.reconnectAttempts === 0) {
+            this.reconnectAttempts++;
+            setTimeout(() => {
+              this.connectWithPolling(serverUrl, user).then(resolve).catch(reject);
+            }, 2000);
+          } else {
+            reject(error);
+          }
         });
 
         this.socket.on('disconnect', (reason) => {
           console.log('Disconnected from chat server:', reason);
           this.emit('disconnected', reason);
           
-          if (reason === 'io server disconnect') {
+          if (reason === 'io server disconnect' || reason === 'transport close') {
             // Server disconnected, try to reconnect
             this.handleReconnection();
           }
@@ -98,6 +128,49 @@ class SocketService {
       } catch (error) {
         reject(error);
       }
+    });
+  }
+
+  // Fallback connection method with polling only
+  private connectWithPolling(serverUrl: string, user: User): Promise<void> {
+    return new Promise((resolve, reject) => {
+      console.log('Attempting fallback connection with polling transport...');
+      
+      this.socket = io(serverUrl, {
+        auth: {
+          userId: user.id,
+          userName: user.name,
+          userEmail: user.email
+        },
+        transports: ['polling'], // Only use polling as fallback
+        timeout: 15000,
+        forceNew: true,
+        reconnection: true,
+        reconnectionAttempts: 3,
+        reconnectionDelay: 2000
+      });
+
+      const fallbackTimeout = setTimeout(() => {
+        console.error('Fallback connection timeout');
+        this.socket?.disconnect();
+        reject(new Error('Fallback connection timeout'));
+      }, 15000);
+
+      this.socket.on('connect', () => {
+        clearTimeout(fallbackTimeout);
+        console.log('Connected via polling fallback');
+        this.reconnectAttempts = 0;
+        this.emit('connected');
+        resolve();
+      });
+
+      this.socket.on('connect_error', (error) => {
+        clearTimeout(fallbackTimeout);
+        console.error('Fallback connection error:', error);
+        reject(error);
+      });
+
+      this.setupSocketEventHandlers();
     });
   }
 

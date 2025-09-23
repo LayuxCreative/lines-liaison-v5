@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabase';
+import { supabase } from '../config/unifiedSupabase';
 
 // Enhanced connection utility with automatic retry and circuit breaker pattern
 interface ConnectionMetrics {
@@ -49,7 +49,8 @@ class EnhancedConnection {
   };
 
   private readonly maxFailures = 5;
-  private readonly circuitBreakerTimeout = 60000; // 1 minute
+  private readonly circuitBreakerTimeout = 60000; // 60 seconds
+  private readonly queryTimeout = 15000; // 15 seconds per query
 
   // Execute query with automatic retry and circuit breaker
   async executeQuery<T>(
@@ -72,7 +73,13 @@ class EnhancedConnection {
         this.metrics.totalRequests++;
         this.metrics.lastRequestTime = new Date();
 
-        const result = await queryFn();
+        // Add timeout to query execution
+        const result = await Promise.race([
+          queryFn(),
+          new Promise<QueryResult<T>>((_, reject) => 
+            setTimeout(() => reject(new Error('Query timeout')), this.queryTimeout)
+          )
+        ]);
 
         if (!result.error) {
           // Success - update metrics and reset circuit breaker

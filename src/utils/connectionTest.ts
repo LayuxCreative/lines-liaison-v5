@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabase';
+import { supabase } from '../config/unifiedSupabase';
 
 export class SupabaseConnectionTest {
   static async testConnection(): Promise<{ success: boolean; message: string; latency?: number }> {
@@ -7,24 +7,59 @@ export class SupabaseConnectionTest {
     try {
       console.log('Testing Supabase connection...');
       
-      // First test basic connectivity with a simple query
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout for better stability
+      // Retry logic for better reliability
+      let lastError: any = null;
+      const maxRetries = 3;
       
-      const { error: connectError } = await supabase
-        .from('activities')
-        .select('count', { count: 'exact', head: true })
-        .abortSignal(controller.signal);
-      
-      clearTimeout(timeoutId);
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`Connection attempt ${attempt}/${maxRetries}...`);
+          
+          // Test basic connectivity with a simple query
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+          
+          const { error: connectError } = await supabase
+            .from('activities')
+            .select('count', { count: 'exact', head: true })
+            .abortSignal(controller.signal);
+          
+          clearTimeout(timeoutId);
+          
+          if (!connectError) {
+            // Success on this attempt
+            break;
+          }
+          
+          lastError = connectError;
+          
+          // If it's an API key issue, don't retry
+          if (connectError.message.includes('Invalid API key') || connectError.message.includes('JWT')) {
+            break;
+          }
+          
+          // Wait before retry (except on last attempt)
+          if (attempt < maxRetries) {
+            console.log(`Retrying in 2 seconds...`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+          
+        } catch (retryError) {
+          lastError = retryError;
+          if (attempt < maxRetries) {
+            console.log(`Retrying in 2 seconds...`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        }
+      }
       
       const latency = Date.now() - startTime;
       
-      if (connectError) {
-        console.error('❌ Database connection failed:', connectError);
+      if (lastError) {
+        console.error('❌ Database connection failed:', lastError);
         
         // Check if it's an API key issue
-        if (connectError.message.includes('Invalid API key') || connectError.message.includes('JWT')) {
+        if (lastError.message && (lastError.message.includes('Invalid API key') || lastError.message.includes('JWT'))) {
           return {
             success: false,
             message: 'Invalid API configuration - check your Supabase keys',
@@ -34,7 +69,7 @@ export class SupabaseConnectionTest {
         
         return {
           success: false,
-          message: `Database connection failed: ${connectError.message}`,
+          message: `Connection timeout - please check your database connection`,
           latency
         };
       }
@@ -62,7 +97,7 @@ export class SupabaseConnectionTest {
       if (error instanceof Error && error.name === 'AbortError') {
         return {
           success: false,
-          message: 'Connection timeout - please check your network or try again',
+          message: 'Connection timeout - please check your database connection',
           latency
         };
       }
@@ -71,7 +106,7 @@ export class SupabaseConnectionTest {
       if (error instanceof Error && error.message.includes('fetch')) {
         return {
           success: false,
-          message: 'Network error - check your internet connection',
+          message: 'Network error - check your database connection',
           latency
         };
       }

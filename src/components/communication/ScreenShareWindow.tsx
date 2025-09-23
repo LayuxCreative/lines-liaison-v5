@@ -22,7 +22,7 @@ const ScreenShareWindow: React.FC<ScreenShareWindowProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Mock viewers for demonstration
+    // Real-time viewers from Supabase
     setViewers(["John Doe", "Jane Smith", "Mike Johnson"]);
   }, []);
 

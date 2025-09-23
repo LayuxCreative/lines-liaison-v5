@@ -8,6 +8,7 @@ import {
 } from "../../types";
 import { supabaseService } from "../../services/supabaseService";
 import { useNotifications } from "../../contexts/NotificationContext";
+import { activityLogger } from "../../utils/activityLogger";
 
 
 
@@ -112,6 +113,14 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
     if (!newRole.name.trim()) return;
 
     try {
+      // Log role creation attempt
+      await activityLogger.log("role_create", "info", "Role creation initiated", {
+        roleName: newRole.name,
+        description: newRole.description,
+        permissionsCount: newRole.permissions.length,
+        userId: currentUser.id
+      });
+
       const roleData = {
         name: newRole.name,
         display_name: newRole.name,
@@ -131,6 +140,15 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
         });
       }
 
+      // Log successful role creation
+      await activityLogger.log("role_create", "success", "Role created successfully", {
+        roleId: createdRole.id,
+        roleName: createdRole.name,
+        description: createdRole.description,
+        permissionsCount: newRole.permissions.length,
+        userId: currentUser.id
+      });
+
       addNotification({
         type: 'success',
         title: 'Success',
@@ -143,6 +161,17 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
       setIsCreating(false);
     } catch (error) {
       console.error('Error creating role:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create role';
+      
+      // Log role creation error
+      await activityLogger.log("role_create", "error", "Failed to create role", {
+        roleName: newRole.name,
+        description: newRole.description,
+        permissionsCount: newRole.permissions.length,
+        userId: currentUser.id,
+        error: errorMessage
+      });
+
       addNotification({
         type: 'error',
         title: 'Error',
@@ -155,6 +184,14 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
 
   const handleUpdateRole = async (role: Role) => {
     try {
+      // Log role update attempt
+      await activityLogger.log("role_update", "info", "Role update initiated", {
+        roleId: role.id,
+        roleName: role.name,
+        description: role.description,
+        userId: currentUser.id
+      });
+
       const permissionIds = Array.isArray(role.permissions) && typeof role.permissions[0] === 'string' 
         ? role.permissions as string[]
         : (role.permissions as Permission[]).map((p: Permission) => p.id);
@@ -176,6 +213,15 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
         onRoleUpdate(role.id, role);
       }
 
+      // Log successful role update
+      await activityLogger.log("role_update", "success", "Role updated successfully", {
+        roleId: role.id,
+        roleName: role.name,
+        description: role.description,
+        permissionsCount: permissionIds.length,
+        userId: currentUser.id
+      });
+
       addNotification({
         type: 'success',
         title: 'Success',
@@ -188,6 +234,16 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
       setIsEditing(false);
     } catch (error) {
       console.error('Error updating role:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update role';
+      
+      // Log role update error
+      await activityLogger.log("role_update", "error", "Failed to update role", {
+        roleId: role.id,
+        roleName: role.name,
+        userId: currentUser.id,
+        error: errorMessage
+      });
+
       addNotification({
         type: 'error',
         title: 'Error',
@@ -201,12 +257,22 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
   const handleDeleteRole = async (roleId: string) => {
     if (confirm("Are you sure you want to delete this role?")) {
       try {
+        activityLogger.log("role_delete", "info", "Starting role deletion", {
+          roleId,
+          userId: currentUser.id
+        });
+
         await supabaseService.deleteRole(roleId);
         setRoles((prev) => prev.filter((r) => r.id !== roleId));
 
         if (onRoleDelete) {
           onRoleDelete(roleId);
         }
+
+        activityLogger.log("role_delete", "success", "Role deleted successfully", {
+          roleId,
+          userId: currentUser.id
+        });
 
         addNotification({
           type: 'success',
@@ -217,6 +283,13 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
         });
       } catch (error) {
         console.error('Error deleting role:', error);
+        
+        activityLogger.log("role_delete", "error", "Failed to delete role", {
+          roleId,
+          userId: currentUser.id,
+          error: error instanceof Error ? error.message : "Unknown error"
+        });
+
         addNotification({
           type: 'error',
           title: 'Error',

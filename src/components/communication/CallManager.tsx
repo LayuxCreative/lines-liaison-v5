@@ -16,6 +16,7 @@ import {
 import WebRTCService, { type EventHandler } from "../../services/webrtc/WebRTCService";
 import SocketService, { type SocketEventHandler } from "../../services/chat/SocketService";
 import type SimplePeer from "simple-peer";
+import { activityLogger } from "../../utils/activityLogger";
 
 export interface CallParticipant {
   id: string;
@@ -228,7 +229,33 @@ const CallManager: React.FC<CallManagerProps> = ({
   const acceptCall = async () => {
     if (!incomingCall) return;
 
+    const callTimeout = setTimeout(() => {
+      console.error("Call acceptance timeout");
+      setIncomingCall(null);
+      alert("Call acceptance timed out. Please try again.");
+    }, 15000); // 15 second timeout
+
     try {
+      await activityLogger.log("call_manager_accept", "info", "Accepting incoming call", {
+        callerId: incomingCall.callerId,
+        callerName: incomingCall.callerName,
+        roomId: incomingCall.roomId,
+        callType: incomingCall.type,
+        userId: currentUser.id
+      });
+
+      // Check media permissions first
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: incomingCall.type === "video",
+          audio: true,
+        });
+        stream.getTracks().forEach(track => track.stop()); // Clean up test stream
+      } catch (mediaError) {
+        clearTimeout(callTimeout);
+        throw new Error("Media access denied. Please allow camera and microphone permissions.");
+      }
+
       await webrtcService.startCall(incomingCall.roomId, {
         video: incomingCall.type === "video",
         audio: true,
@@ -247,80 +274,274 @@ const CallManager: React.FC<CallManagerProps> = ({
       socketService.acceptCall(incomingCall.roomId);
       setIncomingCall(null);
       startCallTimer();
+      clearTimeout(callTimeout);
+
+      await activityLogger.log("call_manager_accept", "success", "Call accepted successfully", {
+        callerId: incomingCall.callerId,
+        callerName: incomingCall.callerName,
+        roomId: incomingCall.roomId,
+        callType: incomingCall.type,
+        userId: currentUser.id
+      });
     } catch (error) {
+      clearTimeout(callTimeout);
       console.error("Failed to accept call:", error);
-      alert(
-        "Failed to accept call. Please check your camera and microphone permissions.",
-      );
+      await activityLogger.log("call_manager_accept", "error", "Failed to accept call", {
+        callerId: incomingCall.callerId,
+        callerName: incomingCall.callerName,
+        roomId: incomingCall.roomId,
+        callType: incomingCall.type,
+        userId: currentUser.id,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+      
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+      alert(`Failed to accept call: ${errorMessage}`);
+      setIncomingCall(null);
     }
   };
 
   // Reject incoming call
-  const rejectCall = () => {
+  const rejectCall = async () => {
     if (!incomingCall) return;
 
-    socketService.rejectCall(incomingCall.roomId);
-    setIncomingCall(null);
+    try {
+      await activityLogger.log("call_manager_reject", "info", "Rejecting incoming call", {
+        callerId: incomingCall.callerId,
+        callerName: incomingCall.callerName,
+        roomId: incomingCall.roomId,
+        callType: incomingCall.type,
+        userId: currentUser.id
+      });
+
+      socketService.rejectCall(incomingCall.roomId);
+      setIncomingCall(null);
+
+      await activityLogger.log("call_manager_reject", "success", "Call rejected successfully", {
+        callerId: incomingCall.callerId,
+        callerName: incomingCall.callerName,
+        roomId: incomingCall.roomId,
+        callType: incomingCall.type,
+        userId: currentUser.id
+      });
+    } catch (error) {
+      await activityLogger.log("call_manager_reject", "error", "Failed to reject call", {
+        callerId: incomingCall.callerId,
+        callerName: incomingCall.callerName,
+        roomId: incomingCall.roomId,
+        callType: incomingCall.type,
+        userId: currentUser.id,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
   };
 
   // End call
-  const endCall = () => {
-    webrtcService.endCall();
+  const endCall = async () => {
+    const endTimeout = setTimeout(() => {
+      console.warn("Call end operation timed out, forcing cleanup");
+      // Force cleanup even if operations fail
+      setCallState({
+        isActive: false,
+        isIncoming: false,
+        callType: "audio",
+        roomId: "",
+        participants: [],
+        duration: 0,
+        isRecording: false,
+      });
+      setLocalStream(null);
+      setIsScreenSharing(false);
+      stopCallTimer();
+      onCallEnd?.();
+    }, 10000); // 10 second timeout
 
-    if (callState.isActive) {
-      socketService.endCall(callState.roomId);
+    try {
+      await activityLogger.log("call_manager_end", "info", "Ending call", {
+        roomId: callState.roomId,
+        callType: callState.callType,
+        duration: callState.duration,
+        participantsCount: callState.participants.length,
+        userId: currentUser.id
+      });
+
+      // Clean up local stream first
+      if (localStream) {
+        localStream.getTracks().forEach(track => {
+          try {
+            track.stop();
+          } catch (e) {
+            console.warn("Failed to stop track:", e);
+          }
+        });
+      }
+
+      // End WebRTC connections
+      try {
+        webrtcService.endCall();
+      } catch (e) {
+        console.warn("Failed to end WebRTC call:", e);
+      }
+
+      // Notify server if call was active
+      if (callState.isActive) {
+        try {
+          socketService.endCall(callState.roomId);
+        } catch (e) {
+          console.warn("Failed to notify server of call end:", e);
+        }
+      }
+
+      setCallState({
+        isActive: false,
+        isIncoming: false,
+        callType: "audio",
+        roomId: "",
+        participants: [],
+        duration: 0,
+        isRecording: false,
+      });
+
+      setLocalStream(null);
+      setIsScreenSharing(false);
+      stopCallTimer();
+      clearTimeout(endTimeout);
+      onCallEnd?.();
+
+      await activityLogger.log("call_manager_end", "success", "Call ended successfully", {
+        roomId: callState.roomId,
+        callType: callState.callType,
+        duration: callState.duration,
+        participantsCount: callState.participants.length,
+        userId: currentUser.id
+      });
+    } catch (error) {
+      clearTimeout(endTimeout);
+      console.error("Error ending call:", error);
+      await activityLogger.log("call_manager_end", "error", "Failed to end call", {
+        roomId: callState.roomId,
+        callType: callState.callType,
+        duration: callState.duration,
+        participantsCount: callState.participants.length,
+        userId: currentUser.id,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+      
+      // Force cleanup on error
+      setCallState({
+        isActive: false,
+        isIncoming: false,
+        callType: "audio",
+        roomId: "",
+        participants: [],
+        duration: 0,
+        isRecording: false,
+      });
+      setLocalStream(null);
+      setIsScreenSharing(false);
+      stopCallTimer();
+      onCallEnd?.();
     }
-
-    setCallState({
-      isActive: false,
-      isIncoming: false,
-      callType: "audio",
-      roomId: "",
-      participants: [],
-      duration: 0,
-      isRecording: false,
-    });
-
-    setLocalStream(null);
-    setIsScreenSharing(false);
-    stopCallTimer();
-    onCallEnd?.();
   };
 
   // Toggle audio
-  const toggleAudio = () => {
-    if (localStream) {
-      const audioTrack = localStream.getAudioTracks()[0];
-      if (audioTrack) {
-        audioTrack.enabled = !audioTrack.enabled;
-        setIsAudioEnabled(audioTrack.enabled);
+  const toggleAudio = async () => {
+    try {
+      await activityLogger.log("call_manager_toggle_audio", "info", "Toggling audio", {
+        roomId: callState.roomId,
+        currentState: isAudioEnabled,
+        userId: currentUser.id
+      });
+
+      if (localStream) {
+        const audioTrack = localStream.getAudioTracks()[0];
+        if (audioTrack) {
+          audioTrack.enabled = !audioTrack.enabled;
+          setIsAudioEnabled(audioTrack.enabled);
+
+          await activityLogger.log("call_manager_toggle_audio", "success", "Audio toggled successfully", {
+            roomId: callState.roomId,
+            newState: audioTrack.enabled,
+            userId: currentUser.id
+          });
+        }
       }
+    } catch (error) {
+      await activityLogger.log("call_manager_toggle_audio", "error", "Failed to toggle audio", {
+        roomId: callState.roomId,
+        userId: currentUser.id,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   };
 
   // Toggle video
-  const toggleVideo = () => {
-    if (localStream) {
-      const videoTrack = localStream.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.enabled = !videoTrack.enabled;
-        setIsVideoEnabled(videoTrack.enabled);
+  const toggleVideo = async () => {
+    try {
+      await activityLogger.log("call_manager_toggle_video", "info", "Toggling video", {
+        roomId: callState.roomId,
+        currentState: isVideoEnabled,
+        userId: currentUser.id
+      });
+
+      if (localStream) {
+        const videoTrack = localStream.getVideoTracks()[0];
+        if (videoTrack) {
+          videoTrack.enabled = !videoTrack.enabled;
+          setIsVideoEnabled(videoTrack.enabled);
+
+          await activityLogger.log("call_manager_toggle_video", "success", "Video toggled successfully", {
+            roomId: callState.roomId,
+            newState: videoTrack.enabled,
+            userId: currentUser.id
+          });
+        }
       }
+    } catch (error) {
+      await activityLogger.log("call_manager_toggle_video", "error", "Failed to toggle video", {
+        roomId: callState.roomId,
+        userId: currentUser.id,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   };
 
   // Toggle screen sharing
   const toggleScreenShare = async () => {
     try {
+      await activityLogger.log("call_manager_toggle_screen_share", "info", "Toggling screen share", {
+        roomId: callState.roomId,
+        currentState: isScreenSharing,
+        userId: currentUser.id
+      });
+
       if (isScreenSharing) {
         await webrtcService.stopScreenShare();
         setIsScreenSharing(false);
+
+        await activityLogger.log("call_manager_toggle_screen_share", "success", "Screen sharing stopped successfully", {
+          roomId: callState.roomId,
+          action: "stop",
+          userId: currentUser.id
+        });
       } else {
         await webrtcService.startScreenShare();
         setIsScreenSharing(true);
+
+        await activityLogger.log("call_manager_toggle_screen_share", "success", "Screen sharing started successfully", {
+          roomId: callState.roomId,
+          action: "start",
+          userId: currentUser.id
+        });
       }
     } catch (error) {
       console.error("Failed to toggle screen share:", error);
+      await activityLogger.log("call_manager_toggle_screen_share", "error", "Failed to toggle screen share", {
+        roomId: callState.roomId,
+        currentState: isScreenSharing,
+        userId: currentUser.id,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   };
 

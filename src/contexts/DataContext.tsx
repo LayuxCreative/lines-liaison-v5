@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { Project, ProjectFile, Message, Task } from "../types";
-import { supabase } from "../config/supabase";
+import { supabase } from '../config/unifiedSupabase';
 import { supabaseStorageService } from "../services/supabaseStorageService";
 import { useAuth } from "./AuthContext";
-import { supabaseDataWrapper } from "../utils/mockDataProtection";
+import { activityLogger } from "../utils/activityLogger";
 
 interface DataContextType {
   projects: Project[];
@@ -42,7 +42,7 @@ const convertSupabaseProject = (data: Record<string, unknown>): Project => {
     managerId: data.manager_id as string,
     teamMembers: (data.team_members as string[]) || [],
     startDate: new Date(data.start_date as string),
-    endDate: data.end_date ? new Date(data.end_date as string) : undefined,
+    endDate: data.end_date ? new Date(data.end_date as string) : new Date(),
     progress: (data.progress as number) || 0,
     budget: (data.budget as number) || 0,
     spent: (data.spent as number) || 0,
@@ -107,13 +107,10 @@ const convertSupabaseMessage = (data: Record<string, unknown>): Message => {
     id: data.id as string,
     projectId: data.project_id as string,
     senderId: data.sender_id as string,
-    senderName: (data.sender?.full_name as string) || "",
     content: data.content as string,
-    timestamp: new Date(data.created_at as string),
-    type: (data.type as Message['type']) || 'text',
+    timestamp: new Date(data.timestamp as string),
+    type: data.type as Message['type'],
     attachments: (data.attachments as string[]) || [],
-    isRead: (data.is_read as boolean) || false,
-    reactions: (data.reactions as unknown[]) || [],
   };
 };
 
@@ -143,8 +140,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
       if (error) throw error;
 
       const convertedProjects = data?.map(convertSupabaseProject) || [];
-      const validatedProjects = supabaseDataWrapper(convertedProjects, 'projects', 'load');
-      setProjects(validatedProjects);
+      setProjects(convertedProjects);
     } catch (error) {
       console.error("Error loading projects:", error);
     }
@@ -218,21 +214,44 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  // Load essential data when user logs in
+  // Load essential data when user logs in with timeout handling
   useEffect(() => {
     if (user) {
       setIsLoading(true);
       
-      // Load data directly without connection test to avoid dependency loops
+      // Load data with timeout handling to avoid dependency loops
+      const fetchWithTimeout = async (fetchFunction: () => Promise<void>, timeout = 10000) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        
+        try {
+          await fetchFunction();
+          clearTimeout(timeoutId);
+        } catch (error) {
+          clearTimeout(timeoutId);
+          if (error instanceof Error && error.name === 'AbortError') {
+            throw new Error('Connection timeout - please check your network');
+          }
+          throw error;
+        }
+      };
+
       Promise.all([
-        loadProjects(),
-        loadTasks(),
-        loadFiles(),
-        loadMessages()
+        fetchWithTimeout(loadProjects),
+        fetchWithTimeout(loadTasks),
+        fetchWithTimeout(loadFiles),
+        fetchWithTimeout(loadMessages)
       ]).then(() => {
         setIsLoading(false);
       }).catch((error) => {
         console.error('❌ DataContext: Error loading data:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Failed to load data';
+        
+        // Show user-friendly timeout message
+        if (errorMessage.includes('timeout') || errorMessage.includes('Connection timeout')) {
+          console.error('Connection timeout - please check your internet connection and try again');
+        }
+        
         setIsLoading(false);
       });
     } else {
@@ -250,6 +269,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!user) return;
 
     try {
+      await activityLogger.log("project_create", "info", "Creating new project", {
+        projectName: projectData.name,
+        category: projectData.category,
+        priority: projectData.priority
+      });
+
       const { data, error } = await supabase
         .from("projects")
         .insert({
@@ -274,14 +299,29 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
 
       const newProject = convertSupabaseProject(data);
       setProjects((prev) => [newProject, ...prev]);
+      
+      await activityLogger.log("project_create", "success", "Project created successfully", {
+        projectId: newProject.id,
+        projectName: projectData.name
+      });
     } catch (error) {
       console.error("Error adding project:", error);
+      await activityLogger.log("project_create", "error", "Failed to create project", {
+        projectName: projectData.name,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   };
 
   // Update project function
   const updateProject = async (id: string, updates: Partial<Project>) => {
     try {
+      const updatedFields = Object.keys(updates);
+      await activityLogger.log("project_update", "info", "Updating project", {
+        projectId: id,
+        updatedFields
+      });
+
       const updateData: Record<string, unknown> = {};
 
       if (updates.name) updateData.name = updates.name;
@@ -308,8 +348,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
           project.id === id ? { ...project, ...updates } : project,
         ),
       );
+
+      await activityLogger.log("project_update", "success", "Project updated successfully", {
+        projectId: id,
+        updatedFields
+      });
     } catch (error) {
       console.error("Error updating project:", error);
+      await activityLogger.log("project_update", "error", "Failed to update project", {
+        projectId: id,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   };
 
@@ -362,6 +411,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!user) return;
 
     try {
+      await activityLogger.log("task_create", "info", "Creating new task", {
+        projectId: taskData.projectId,
+        taskTitle: taskData.title,
+        priority: taskData.priority
+      });
+
       const { data, error } = await supabase
         .from("tasks")
         .insert({
@@ -386,14 +441,30 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
 
       const newTask = convertSupabaseTask(data);
       setTasks((prev) => [newTask, ...prev]);
+      
+      await activityLogger.log("task_create", "success", "Task created successfully", {
+        taskId: newTask.id,
+        projectId: taskData.projectId,
+        taskTitle: taskData.title
+      });
     } catch (error) {
       console.error("Error adding task:", error);
+      await activityLogger.log("task_create", "error", "Failed to create task", {
+        projectId: taskData.projectId,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   };
 
   // Update task function
   const updateTask = async (id: string, updates: Partial<Task>) => {
     try {
+      const updatedFields = Object.keys(updates);
+      await activityLogger.log("task_update", "info", "Updating task", {
+        taskId: id,
+        updatedFields
+      });
+
       const updateData: Record<string, unknown> = {};
 
       if (updates.title) updateData.title = updates.title;
@@ -420,42 +491,76 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
       setTasks((prev) =>
         prev.map((task) => (task.id === id ? { ...task, ...updates } : task)),
       );
+
+      await activityLogger.log("task_update", "success", "Task updated successfully", {
+        taskId: id,
+        updatedFields
+      });
     } catch (error) {
       console.error("Error updating task:", error);
+      await activityLogger.log("task_update", "error", "Failed to update task", {
+        taskId: id,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   };
 
   // Placeholder functions for messages and activities
   const addMessage = async (message: Omit<Message, "id" | "timestamp">) => {
-    const newMessage: Message = {
-      ...message,
-      id: Date.now().toString(),
-      timestamp: new Date(),
-    };
-    
-    // Save to Supabase first
-     try {
-       const { error } = await supabase
-         .from("messages")
-         .insert({
-           id: newMessage.id,
-           project_id: newMessage.projectId,
-           sender_id: newMessage.senderId,
-           content: newMessage.content,
-           timestamp: newMessage.timestamp.toISOString(),
-           type: newMessage.type,
-           attachments: newMessage.attachments || [],
-         });
+    if (!user) return;
+
+    try {
+      await activityLogger.log("message_create", "info", "Creating new message", {
+        projectId: message.projectId,
+        senderId: message.senderId,
+        messageType: message.type,
+        contentLength: message.content.length
+      });
+
+      const newMessage: Message = {
+        ...message,
+        id: Date.now().toString(),
+        timestamp: new Date(),
+      };
       
+      // Save to Supabase first
+      const { error } = await supabase
+        .from("messages")
+        .insert({
+          id: newMessage.id,
+          project_id: newMessage.projectId,
+          sender_id: newMessage.senderId,
+          content: newMessage.content,
+          timestamp: newMessage.timestamp.toISOString(),
+          type: newMessage.type,
+          attachments: newMessage.attachments || [],
+        });
+     
       if (error) {
         console.error("Error saving message to Supabase:", error);
+        await activityLogger.log("message_create", "error", "Failed to save message to database", {
+          projectId: message.projectId,
+          senderId: message.senderId,
+          error: error.message
+        });
         return;
       }
       
       // Only add to local state if Supabase save was successful
       setMessages((prev) => [newMessage, ...prev]);
+      
+      await activityLogger.log("message_create", "success", "Message created successfully", {
+        messageId: newMessage.id,
+        projectId: message.projectId,
+        senderId: message.senderId
+      });
     } catch (error) {
       console.error("Error saving message:", error);
+      await activityLogger.log("message_create", "error", "Failed to create message", {
+        projectId: message.projectId,
+        senderId: message.senderId,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   };
 
@@ -541,10 +646,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
 };
 
 // Fix Fast Refresh compatibility
-export const useData = (): DataContextType => {
+// Export hook with consistent naming for Fast Refresh compatibility
+export function useData() {
   const context = useContext(DataContext);
   if (!context) {
-    throw new Error('useData must be used within a DataProvider');
+    throw new Error("useData must be used within a DataProvider");
   }
   return context;
-};
+}
+
+// Add displayName for Fast Refresh compatibility
+useData.displayName = 'useData';

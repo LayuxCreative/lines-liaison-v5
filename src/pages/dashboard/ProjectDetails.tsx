@@ -43,6 +43,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useData } from "../../contexts/DataContext";
 import { format } from "date-fns";
 import FileViewer from "../../components/dashboard/FileViewer";
+import { activityLogger } from "../../utils/activityLogger";
 
 
 import { ProjectFile, Task } from "../../types";
@@ -174,7 +175,10 @@ const ProjectDetails: React.FC = () => {
     if (!messageText.trim() || !user || !project) return;
 
     try {
-      // console.log("Sending message:", messageText);
+      await activityLogger.log("message_send", "info", "Sending project message", {
+        projectId: project.id,
+        messageLength: messageText.trim().length
+      });
       
       const newMessage: Omit<Message, "id" | "timestamp"> = {
         projectId: project.id,
@@ -186,8 +190,16 @@ const ProjectDetails: React.FC = () => {
 
       await addMessage(newMessage);
       setMessageText("");
+      
+      await activityLogger.log("message_send", "success", "Project message sent successfully", {
+        projectId: project.id
+      });
     } catch (error) {
       console.error("Error sending message:", error);
+      await activityLogger.log("message_send", "error", "Failed to send project message", {
+        projectId: project.id,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   };
 
@@ -195,8 +207,17 @@ const ProjectDetails: React.FC = () => {
     if (!feedbackText.trim()) return;
 
     try {
+      await activityLogger.log("feedback_send", "info", "Sending project feedback", {
+        projectId: project?.id,
+        feedbackLength: feedbackText.trim().length
+      });
+      
       // console.log("Sending feedback:", feedbackText);
       setFeedbackText("");
+      
+      await activityLogger.log("feedback_send", "success", "Project feedback sent successfully", {
+        projectId: project?.id
+      });
       // Here you would typically send the feedback to your backend
     } catch (error) {
       console.error("Error sending feedback:", error);
@@ -207,13 +228,39 @@ const ProjectDetails: React.FC = () => {
     if (!project || !user) return;
 
     try {
+      await activityLogger.log("file_upload", "info", "Starting project file upload", {
+        projectId: project.id,
+        projectName: project.name,
+        filesCount: files.length,
+        userId: user.id
+      });
+
       const uploadPromises = files.map(file => 
         addProjectFile(project.id, file)
       );
       
       const uploadedFiles = await Promise.all(uploadPromises);
+
+      await activityLogger.log("file_upload", "success", "Project files uploaded successfully", {
+        projectId: project.id,
+        projectName: project.name,
+        filesCount: files.length,
+        uploadedFiles: uploadedFiles.length,
+        userId: user.id
+      });
+      
       // console.log("Files uploaded successfully:", uploadedFiles);
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      
+      await activityLogger.log("file_upload", "error", "Project file upload failed", {
+        projectId: project.id,
+        projectName: project.name,
+        filesCount: files.length,
+        userId: user.id,
+        error: errorMessage
+      });
+      
       console.error("Error uploading files:", error);
     }
   };

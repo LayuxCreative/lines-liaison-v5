@@ -12,6 +12,8 @@ import {
   FileText,
   MessageSquare,
   Building2,
+  LogIn,
+  LogOut,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useData } from "../../contexts/DataContext";
@@ -141,6 +143,10 @@ const Dashboard: React.FC = () => {
         return MessageSquare;
       case "approval":
         return CheckCircle;
+      case "user_login":
+        return LogIn;
+      case "user_logout":
+        return LogOut;
       default:
         return AlertCircle;
     }
@@ -310,10 +316,16 @@ const Dashboard: React.FC = () => {
             transition={{ delay: 0.6, duration: 0.6 }}
             className="bg-white rounded-xl shadow-lg overflow-hidden"
           >
-            <div className="p-6 border-b border-gray-200">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
               <h2 className="text-xl font-semibold text-gray-900">
                 Recent Activity
               </h2>
+              <Link 
+                to="/dashboard/reports"
+                className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
+              >
+                View All
+              </Link>
             </div>
             <div className="p-6">
               <div className="space-y-4">

@@ -9,6 +9,10 @@ const globalChannelPool = new Map<string, RealtimeChannel>();
 const channelSubscribers = new Map<string, Set<string>>();
 let subscriberCounter = 0;
 
+// Rate limiting
+// Remove unused constant
+// Remove unused constant since it's not being used anywhere in the code
+
 interface SubscriptionStatus {
   table: string;
   status: 'connected' | 'disconnected' | 'error';
@@ -46,7 +50,7 @@ export const useRealtimeSubscription = () => {
     
     const setupSubscriptions = async () => {
       try {
-        const { supabase } = await import('../config/supabase');
+        const { supabase } = await import('../config/unifiedSupabase');
         
         for (const table of tables) {
           const channelKey = `${table}_${user.id}`;
@@ -116,15 +120,13 @@ export const useRealtimeSubscription = () => {
 
                   // Add notification for important updates
                   if (payload.eventType === 'INSERT' && table === 'tasks') {
-                    addNotification({
-                      id: `task-${Date.now()}`,
-                      title: 'New Task Created',
-                      message: 'A new task has been assigned to your project',
-                      type: 'info',
-                      timestamp: new Date(),
-                      read: false
-                    });
-                  }
+                      addNotification({
+                        title: 'New Task Created',
+                        message: 'A new task has been assigned to your project',
+                        type: 'info',
+                        userId: user.id
+                      });
+                    }
                 } catch (error) {
                   console.error(`Error handling realtime update for ${table}:`, error);
                 }

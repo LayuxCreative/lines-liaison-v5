@@ -1,7 +1,7 @@
 // Supabase Health Check Utility
 // Advanced connection monitoring and diagnostics
 
-import { supabase, getConnectionHealth } from '../config/supabase';
+import { supabase } from '../config/unifiedSupabase';
 
 export interface HealthCheckResult {
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -109,13 +109,20 @@ export class SupabaseHealthMonitor {
 
   private async testRealtime(): Promise<{ success: boolean; error?: string }> {
     try {
-      const connectionHealth = getConnectionHealth();
-      if (!connectionHealth.healthy) {
-        return { 
-          success: false, 
-          error: `Unhealthy connection (attempts: ${connectionHealth.reconnectAttempts})` 
-        };
-      }
+      // Simple realtime test by checking if we can create a channel
+      const channel = supabase.channel('health-check');
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Timeout')), 5000);
+        channel.subscribe((status) => {
+          clearTimeout(timeout);
+          if (status === 'SUBSCRIBED') {
+            resolve(true);
+          } else {
+            reject(new Error(`Status: ${status}`));
+          }
+        });
+      });
+      channel.unsubscribe();
       return { success: true };
     } catch (error) {
       return { 

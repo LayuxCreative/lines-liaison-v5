@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useAuth } from "./AuthContext";
-import { supabase } from "../config/supabase";
+import { supabase } from "../config/unifiedSupabase";
+import { activityLogger } from "../utils/activityLogger";
 
 export interface Notification {
   id: string;
@@ -124,16 +125,23 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({
   const addNotification = async (
     notificationData: Omit<Notification, "id" | "timestamp" | "isRead">,
   ) => {
-    // Add notification locally first for immediate UI feedback
-    const fallbackNotification: Notification = {
-      id: `temp-${Date.now()}`,
-      ...notificationData,
-      timestamp: new Date(),
-      isRead: false,
-    };
-    setNotifications((prev) => [fallbackNotification, ...prev]);
-
     try {
+      await activityLogger.log("notification_create", "info", "Creating new notification", {
+        title: notificationData.title,
+        type: notificationData.type,
+        userId: notificationData.userId,
+        projectId: notificationData.projectId
+      });
+
+      // Add notification locally first for immediate UI feedback
+      const fallbackNotification: Notification = {
+        id: `temp-${Date.now()}`,
+        ...notificationData,
+        timestamp: new Date(),
+        isRead: false,
+      };
+      setNotifications((prev) => [fallbackNotification, ...prev]);
+
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Request timeout')), 5000)
       );
@@ -165,9 +173,20 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({
         setNotifications((prev) => 
           prev.map(n => n.id === fallbackNotification.id ? newNotification : n)
         );
+        
+        await activityLogger.log("notification_create", "success", "Notification created successfully", {
+          notificationId: newNotification.id,
+          title: notificationData.title,
+          userId: notificationData.userId
+        });
       }
     } catch (error) {
       console.error("Error adding notification:", error);
+      await activityLogger.log("notification_create", "error", "Failed to create notification", {
+        title: notificationData.title,
+        userId: notificationData.userId,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
       // Keep the fallback notification if database fails
     }
   };
@@ -263,7 +282,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 };
 
-export function useNotifications() {
+export const useNotifications = () => {
   const context = useContext(NotificationContext);
   if (context === undefined) {
     throw new Error(
@@ -271,7 +290,7 @@ export function useNotifications() {
     );
   }
   return context;
-}
+};
 
 NotificationProvider.displayName = 'NotificationProvider';
 

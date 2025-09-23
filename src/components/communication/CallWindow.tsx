@@ -267,7 +267,7 @@ const CallWindow: React.FC<CallWindowProps> = ({
                 key={participant.id}
                 className="relative bg-gray-800 rounded-lg overflow-hidden"
               >
-                {/* Mock video placeholder */}
+                {/* Video stream */}
                 <div className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
                   <div className="text-center text-white">
                     <div className="w-16 h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-2">

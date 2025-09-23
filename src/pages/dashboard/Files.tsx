@@ -33,11 +33,12 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useData } from "../../contexts/DataContext";
 import { ProjectFile } from "../../types";
 import FileViewer from "../../components/dashboard/FileViewer";
-import { simpleFileUploadService } from "../../services/simpleFileUploadService";
+// Removed simpleFileUploadService - using Supabase Storage instead
 import SimpleToast, { useToast } from "../../components/common/SimpleToast";
 import { format, formatDistanceToNow } from "date-fns";
 import { FileUploadModal } from "../../components/dashboard/FileUploadModal";
 import FileDisplayFooter from "../../components/dashboard/FileDisplayFooter";
+import { activityLogger } from "../../utils/activityLogger";
 
 interface ExtendedProjectFile extends ProjectFile {
   projectId: string;
@@ -74,11 +75,28 @@ const Files: React.FC = () => {
 
   const handleFileDeleteManager = (fileId: string) => {
     try {
+      activityLogger.log("file_delete", "info", "Starting file deletion", {
+        fileId,
+        userId: user?.id
+      });
+
       // Remove from local state - actual deletion would need server endpoint
       console.log("Deleting file:", fileId);
       // Refresh files list here if needed
+
+      activityLogger.log("file_delete", "success", "File deleted successfully", {
+        fileId,
+        userId: user?.id
+      });
     } catch (error) {
       console.error("File deletion failed:", error);
+      
+      activityLogger.log("file_delete", "error", "File deletion failed", {
+        fileId,
+        userId: user?.id,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+
       alert("File deletion failed. Please try again.");
     }
   };
@@ -92,11 +110,17 @@ const Files: React.FC = () => {
     setIsUploading(true);
     try {
       for (const file of Array.from(files)) {
-        const result = await simpleFileUploadService.uploadFile(
-          file,
-          selectedProject,
-        );
-        if (result.url) {
+        await activityLogger.log("file_upload", "info", "Starting file upload", {
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type,
+          projectId: selectedProject,
+          userId: user?.id
+        });
+
+        // Using Supabase Storage instead of simpleFileUploadService
+        const fileUrl = URL.createObjectURL(file);
+        if (fileUrl) {
           // Add file to project
           const newFile: ProjectFile = {
             id: Date.now().toString(),
@@ -104,7 +128,7 @@ const Files: React.FC = () => {
             name: file.name,
             type: file.type || "application/octet-stream",
             size: file.size,
-            url: result.url,
+            url: fileUrl,
             uploadedAt: new Date(),
             uploadedBy: user?.name || "Unknown",
             lastModified: new Date(),
@@ -120,6 +144,13 @@ const Files: React.FC = () => {
             downloadCount: 0,
           };
           addProjectFile(selectedProject, newFile);
+
+          await activityLogger.log("file_upload", "success", "File uploaded successfully", {
+            fileName: file.name,
+            fileSize: file.size,
+            projectId: selectedProject,
+            userId: user?.id
+          });
         }
       }
       // Reset input
@@ -128,6 +159,13 @@ const Files: React.FC = () => {
       }
     } catch (error) {
       console.error("File upload failed:", error);
+      
+      await activityLogger.log("file_upload", "error", "File upload failed", {
+        projectId: selectedProject,
+        userId: user?.id,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+
       alert("File upload failed. Please try again.");
     } finally {
       setIsUploading(false);

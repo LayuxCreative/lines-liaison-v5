@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Send, Paperclip, Smile, Phone, Video, Share } from "lucide-react";
+import { activityLogger } from "../../utils/activityLogger";
 
 interface Message {
   id: string;
@@ -47,22 +48,39 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (newMessage.trim()) {
-      const message: Message = {
-        id: Date.now().toString(),
-        content: newMessage,
-        senderId: currentUser?.id || "current-user",
-        senderName: currentUser?.name || "You",
-        timestamp: new Date(),
-        type: "text",
-      };
+      try {
+        await activityLogger.log("chat_message_send", "info", "Sending chat message", {
+          messageLength: newMessage.trim().length,
+          senderId: currentUser?.id || "current-user"
+        });
 
-      setMessages((prev) => [...prev, message]);
-      setNewMessage("");
+        const message: Message = {
+          id: Date.now().toString(),
+          content: newMessage,
+          senderId: currentUser?.id || "current-user",
+          senderName: currentUser?.name || "You",
+          timestamp: new Date(),
+          type: "text",
+        };
 
-      // Here we would emit the message via Socket.io
-  
+        setMessages((prev) => [...prev, message]);
+        setNewMessage("");
+
+        // Here we would emit the message via Socket.io
+
+        await activityLogger.log("chat_message_send", "success", "Chat message sent successfully", {
+          messageId: message.id,
+          senderId: currentUser?.id || "current-user"
+        });
+      } catch (error) {
+        console.error("Error sending message:", error);
+        await activityLogger.log("chat_message_send", "error", "Failed to send chat message", {
+          senderId: currentUser?.id || "current-user",
+          error: error instanceof Error ? error.message : "Unknown error"
+        });
+      }
     }
   };
 
@@ -77,23 +95,44 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     fileInputRef.current?.click();
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Here we would upload the file and create a message
-  
+      try {
+        await activityLogger.log("chat_file_upload", "info", "Uploading file to chat", {
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type,
+          senderId: currentUser?.id || "current-user"
+        });
 
-      const fileMessage: Message = {
-        id: Date.now().toString(),
-        content: `Shared file: ${file.name}`,
-        senderId: currentUser?.id || "current-user",
-        senderName: currentUser?.name || "You",
-        timestamp: new Date(),
-        type: "file",
-        fileUrl: URL.createObjectURL(file),
-      };
+        // Here we would upload the file and create a message
 
-      setMessages((prev) => [...prev, fileMessage]);
+        const fileMessage: Message = {
+          id: Date.now().toString(),
+          content: `Shared file: ${file.name}`,
+          senderId: currentUser?.id || "current-user",
+          senderName: currentUser?.name || "You",
+          timestamp: new Date(),
+          type: "file",
+          fileUrl: URL.createObjectURL(file),
+        };
+
+        setMessages((prev) => [...prev, fileMessage]);
+
+        await activityLogger.log("chat_file_upload", "success", "File uploaded to chat successfully", {
+          fileName: file.name,
+          messageId: fileMessage.id,
+          senderId: currentUser?.id || "current-user"
+        });
+      } catch (error) {
+        console.error("Error uploading file:", error);
+        await activityLogger.log("chat_file_upload", "error", "Failed to upload file to chat", {
+          fileName: file.name,
+          senderId: currentUser?.id || "current-user",
+          error: error instanceof Error ? error.message : "Unknown error"
+        });
+      }
     }
   };
 

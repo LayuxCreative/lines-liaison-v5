@@ -19,6 +19,7 @@ import { useNotifications } from '../../contexts/NotificationContext';
 import PermissionGroups from './PermissionGroups';
 import ImageUploader from '../common/ImageUploader';
 import { imageStorageService } from '../../services/imageStorageService';
+import { activityLogger } from '../../utils/activityLogger';
 
 interface UserManagementProps {
   onClose?: () => void;
@@ -138,6 +139,11 @@ const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
   // User CRUD operations
   const handleCreateUser = async () => {
     try {
+      await activityLogger.log("user_create", "info", "Creating new user", {
+        userRole: newUser.role,
+        userName: newUser.full_name
+      });
+      
       const userData = {
         ...newUser,
         status: 'available' as const
@@ -148,6 +154,11 @@ const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
       setShowCreateUser(false);
       resetForm();
       
+      await activityLogger.log("user_create", "success", "User created successfully", {
+        createdUserId: createdUser.id,
+        userRole: createdUser.role
+      });
+      
       addNotification({
         type: 'success',
         title: 'User Created',
@@ -156,6 +167,12 @@ const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
       });
     } catch (error) {
       console.error('Error creating user:', error);
+      
+      await activityLogger.log("user_create", "error", "Failed to create user", {
+        userRole: newUser.role,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+      
       addNotification({
         type: 'error',
         title: 'User Creation Error',
@@ -170,6 +187,11 @@ const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
     try {
       // Get original user data for comparison
       const originalUser = users.find(u => u.id === userId);
+      
+      await activityLogger.log("user_update", "info", "Updating user", {
+        userId,
+        updatedFields: Object.keys(updates)
+      });
       
       console.log('Calling supabaseService.updateUser...');
       const updatedUser = await supabaseService.updateUser(userId, updates);
@@ -217,6 +239,12 @@ const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
         ? updatedFields.join(', ')
         : 'profile data';
       
+      await activityLogger.log("user_update", "success", "User updated successfully", {
+        userId,
+        updatedFields: updatedFields,
+        userName: updatedUser.full_name || updatedUser.email
+      });
+      
       addNotification({
         type: 'success',
         title: 'User Updated',
@@ -226,6 +254,12 @@ const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
     } catch (error) {
       console.error('Error updating user:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to update user data';
+      
+      await activityLogger.log("user_update", "error", "Failed to update user", {
+        userId,
+        error: errorMessage
+      });
+      
       addNotification({
         type: 'error',
         title: 'Update Error',

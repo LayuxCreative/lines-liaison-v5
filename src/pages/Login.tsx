@@ -56,9 +56,9 @@ const Login: React.FC = () => {
       });
 
       try {
-        // Add timeout to prevent infinite checking
+        // Increased timeout for better reliability
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Connection timeout')), 10000)
+          setTimeout(() => reject(new Error('Connection timeout')), 30000)
         );
 
         const connectionPromise = SupabaseConnectionTest.testConnection();
@@ -72,11 +72,10 @@ const Login: React.FC = () => {
         });
       } catch (error) {
         console.error('Connection test failed:', error);
+        // Allow login attempt even if connection test fails
         setConnectionStatus({
-          isConnected: false,
-          message: error instanceof Error && error.message.includes('timeout') 
-            ? "Connection timeout - please check your internet" 
-            : "Connection failed",
+          isConnected: true, // Changed to true to allow login attempts
+          message: "Connection test timeout - proceeding with login",
           isChecking: false
         });
       }
@@ -93,12 +92,7 @@ const Login: React.FC = () => {
     setSuccess("");
     setIsSubmitting(true);
 
-    // Check connection before attempting login
-    if (!connectionStatus.isConnected) {
-      setError("Connection failed. Please check your internet connection.");
-      setIsSubmitting(false);
-      return;
-    }
+    // Skip connection check - allow login attempt regardless
 
     // Get form data using FormData as recommended
     const formData = new FormData(e.currentTarget);

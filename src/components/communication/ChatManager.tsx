@@ -14,6 +14,7 @@ import {
   BellOff,
 } from "lucide-react";
 import { SocketService } from "../../services/communication/SocketService";
+import { activityLogger } from "../../utils/activityLogger";
 
 export interface ChatMessage {
   id: string;
@@ -195,37 +196,65 @@ const ChatManager: React.FC<ChatManagerProps> = ({
   const sendMessage = useCallback(async () => {
     if (!newMessage.trim() || !activeRoom || !socketService.current) return;
 
-    const message: ChatMessage = {
-      id: `msg_${Date.now()}`,
-      content: newMessage.trim(),
-      senderId: currentUser.id,
-      senderName: currentUser.name,
-      timestamp: new Date(),
-      type: "text",
-      replyTo: replyingTo?.id,
-    };
+    try {
+      await activityLogger.log("chat_manager_message_send", "info", "Sending message in chat manager", {
+        roomId: activeRoom.id,
+        messageLength: newMessage.trim().length,
+        senderId: currentUser.id,
+        isEdit: !!editingMessage
+      });
 
-    if (editingMessage) {
-      // Edit existing message
-      const editedMessage = {
-        ...editingMessage,
+      const message: ChatMessage = {
+        id: `msg_${Date.now()}`,
         content: newMessage.trim(),
-        edited: true,
-        editedAt: new Date(),
+        senderId: currentUser.id,
+        senderName: currentUser.name,
+        timestamp: new Date(),
+        type: "text",
+        replyTo: replyingTo?.id,
       };
 
-      socketService.current.editMessage(activeRoom.id, editedMessage);
-      setEditingMessage(null);
-    } else {
-      // Send new message
-      socketService.current.sendMessage(activeRoom.id, message);
+      if (editingMessage) {
+        // Edit existing message
+        const editedMessage = {
+          ...editingMessage,
+          content: newMessage.trim(),
+          edited: true,
+          editedAt: new Date(),
+        };
+
+        socketService.current.editMessage(activeRoom.id, editedMessage);
+        setEditingMessage(null);
+
+        await activityLogger.log("chat_manager_message_edit", "success", "Message edited successfully", {
+          roomId: activeRoom.id,
+          messageId: editedMessage.id,
+          senderId: currentUser.id
+        });
+      } else {
+        // Send new message
+        socketService.current.sendMessage(activeRoom.id, message);
+
+        await activityLogger.log("chat_manager_message_send", "success", "Message sent successfully", {
+          roomId: activeRoom.id,
+          messageId: message.id,
+          senderId: currentUser.id
+        });
+      }
+
+      setNewMessage("");
+      setReplyingTo(null);
+
+      // Stop typing indicator
+      socketService.current.stopTyping(activeRoom.id, currentUser.id);
+    } catch (error) {
+      console.error("Error sending message:", error);
+      await activityLogger.log("chat_manager_message_send", "error", "Failed to send message", {
+        roomId: activeRoom.id,
+        senderId: currentUser.id,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
-
-    setNewMessage("");
-    setReplyingTo(null);
-
-    // Stop typing indicator
-    socketService.current.stopTyping(activeRoom.id, currentUser.id);
   }, [newMessage, activeRoom, currentUser, replyingTo, editingMessage]);
 
   // Handle typing

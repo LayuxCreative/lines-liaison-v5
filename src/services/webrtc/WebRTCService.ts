@@ -87,10 +87,35 @@ class WebRTCService {
         audio: options.audio ? this.config.constraints.audio : false,
       };
 
-      this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+      // Add timeout for getUserMedia
+      const mediaPromise = navigator.mediaDevices.getUserMedia(constraints);
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Media access timeout')), 10000);
+      });
+
+      this.localStream = await Promise.race([mediaPromise, timeoutPromise]);
       this.emit("localStream", this.localStream);
       return this.localStream;
-    } catch {
+    } catch (error) {
+      console.error('Failed to access media devices:', error);
+      
+      // Try fallback with reduced constraints
+      if (options.video) {
+        try {
+          console.log('Trying fallback with audio only...');
+          const fallbackConstraints: MediaStreamConstraints = {
+            video: false,
+            audio: options.audio ? this.config.constraints.audio : false,
+          };
+          
+          this.localStream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+          this.emit("localStream", this.localStream);
+          return this.localStream;
+        } catch (fallbackError) {
+          console.error('Fallback media access failed:', fallbackError);
+        }
+      }
+      
       throw new Error("Failed to access camera/microphone");
     }
   }
@@ -120,8 +145,23 @@ class WebRTCService {
       trickle: false,
       config: {
         iceServers: this.config.iceServers,
+        iceCandidatePoolSize: 10,
+        iceTransportPolicy: 'all',
+        bundlePolicy: 'max-bundle',
+        rtcpMuxPolicy: 'require'
       },
       stream: stream || this.localStream || undefined,
+      channelConfig: {
+        ordered: true,
+      },
+      offerOptions: {
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true,
+      },
+      answerOptions: {
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true,
+      }
     });
 
     const peerConnection: PeerConnection = {
@@ -133,12 +173,21 @@ class WebRTCService {
 
     this.peers.set(peerId, peerConnection);
 
+    // Set up connection timeout
+    const connectionTimeout = setTimeout(() => {
+      console.error(`Peer connection timeout for ${peerId}`);
+      this.emit("peerError", { peerId, error: new Error('Connection timeout') });
+      this.endCall(peerId);
+    }, 30000); // 30 second timeout
+
     // Handle peer events
     peer.on("signal", (data) => {
       this.emit("signal", { peerId, signal: data });
     });
 
     peer.on("connect", () => {
+      clearTimeout(connectionTimeout);
+      console.log(`Peer connected: ${peerId}`);
       this.emit("peerConnected", peerId);
     });
 
@@ -147,11 +196,14 @@ class WebRTCService {
     });
 
     peer.on("stream", (remoteStream: MediaStream) => {
+      clearTimeout(connectionTimeout);
       peerConnection.stream = remoteStream;
       this.emit("remoteStream", { peerId, stream: remoteStream });
     });
 
     peer.on("error", (error: Error) => {
+      clearTimeout(connectionTimeout);
+      console.error(`Peer error for ${peerId}:`, error);
       this.emit("peerError", { peerId, error });
     });
 

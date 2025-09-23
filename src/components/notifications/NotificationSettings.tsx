@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNotifications } from "./NotificationManager";
 import { NotificationCategory, NotificationPriority } from "../../types";
+import { activityLogger } from "../../utils/activityLogger";
 
 interface NotificationSettingsProps {
   onClose?: () => void;
@@ -42,10 +43,26 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({
     handleSettingChange("quietHours", newQuietHours);
   };
 
-  const handleSave = () => {
-    updateSettings(settings);
-    setHasChanges(false);
-    if (onClose) onClose();
+  const handleSave = async () => {
+    try {
+      await activityLogger.log("notification_settings_save", "info", "Saving notification settings", {
+        settings: JSON.stringify(settings),
+        hasChanges
+      });
+
+      updateSettings(settings);
+      setHasChanges(false);
+      if (onClose) onClose();
+
+      await activityLogger.log("notification_settings_save", "success", "Notification settings saved successfully", {
+        settings: JSON.stringify(settings)
+      });
+    } catch (error) {
+      await activityLogger.log("notification_settings_save", "error", "Failed to save notification settings", {
+        settings: JSON.stringify(settings),
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
   };
 
   const handleReset = () => {
