@@ -137,7 +137,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
             <div className="flex items-center justify-center space-x-1 text-blue-600">
               <Users className="w-4 h-4" />
               <span className="text-sm font-bold">
-                {project.teamMembers.length}
+                {project.teamMembers?.length || 0}
               </span>
             </div>
             <p className="text-xs text-gray-500 mt-1">Team</p>
@@ -145,7 +145,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
           <div className="text-center">
             <div className="flex items-center justify-center space-x-1 text-green-600">
               <FolderOpen className="w-4 h-4" />
-              <span className="text-sm font-bold">{project.files.length}</span>
+              <span className="text-sm font-bold">{project.files?.length || 0}</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">Files</p>
           </div>

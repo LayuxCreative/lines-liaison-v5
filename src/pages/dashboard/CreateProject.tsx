@@ -6,7 +6,7 @@ import { useData } from '../../contexts/DataContext';
 import { useNotifications } from '../../contexts/NotificationContext';
 import UserStatusIndicator from '../../components/common/UserStatusIndicator';
 import { Project, User, Contract } from "../../types";
-import { supabaseService } from '../../services/supabaseService';
+
 
 interface ProjectFormData {
   name: string;

@@ -221,7 +221,7 @@ const CallManager: React.FC<CallManagerProps> = ({
       webrtcService.off("peerDisconnected", handlePeerDisconnected as EventHandler);
       webrtcService.off("signalNeeded", handleSignalNeeded as EventHandler);
     };
-  }, [webrtcService, socketService]);
+  }, [webrtcService, socketService, endCall]);
 
 
 
@@ -251,7 +251,7 @@ const CallManager: React.FC<CallManagerProps> = ({
           audio: true,
         });
         stream.getTracks().forEach(track => track.stop()); // Clean up test stream
-      } catch (mediaError) {
+      } catch {
         clearTimeout(callTimeout);
         throw new Error("Media access denied. Please allow camera and microphone permissions.");
       }
@@ -299,7 +299,7 @@ const CallManager: React.FC<CallManagerProps> = ({
       alert(`Failed to accept call: ${errorMessage}`);
       setIncomingCall(null);
     }
-  };
+  }, [callState, currentUser.id, localStream, onCallEnd, stopCallTimer, webrtcService, socketService]);
 
   // Reject incoming call
   const rejectCall = async () => {
@@ -337,7 +337,7 @@ const CallManager: React.FC<CallManagerProps> = ({
   };
 
   // End call
-  const endCall = async () => {
+  const endCall = useCallback(async () => {
     const endTimeout = setTimeout(() => {
       console.warn("Call end operation timed out, forcing cleanup");
       // Force cleanup even if operations fail

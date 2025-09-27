@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Calendar, 
@@ -7,16 +7,9 @@ import {
   Search, 
   User, 
   Activity,
-  Clock,
-  AlertCircle,
-  CheckCircle,
-  Info,
-  XCircle,
-  BarChart3,
   TrendingUp,
   Users
 } from 'lucide-react';
-import { supabaseService } from '../../services/supabaseService';
 
 interface ActivityRecord {
   id: string;
@@ -25,7 +18,7 @@ interface ActivityRecord {
   action: string;
   description: string;
   timestamp: string;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
 }
 
 interface FilterOptions {
@@ -39,7 +32,6 @@ interface FilterOptions {
 const Reports: React.FC = () => {
   const [activities, setActivities] = useState<ActivityRecord[]>([]);
   const [filteredActivities, setFilteredActivities] = useState<ActivityRecord[]>([]);
-  const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<FilterOptions>({
     dateFrom: '',
     dateTo: '',
@@ -59,27 +51,7 @@ const Reports: React.FC = () => {
     'comment_added'
   ];
 
-  useEffect(() => {
-    fetchActivities();
-  }, []);
-
-  useEffect(() => {
-    applyFilters();
-  }, [activities, filters]);
-
-  const fetchActivities = async () => {
-     try {
-       setLoading(true);
-       const data = await supabaseService.getActivities();
-       setActivities((data as ActivityRecord[]) || []);
-     } catch (error) {
-       console.error('Error fetching activities:', error);
-     } finally {
-       setLoading(false);
-     }
-   };
-
-  const applyFilters = () => {
+  const applyFilters = useCallback(() => {
     let filtered = [...activities];
 
     // Date filter
@@ -119,79 +91,17 @@ const Reports: React.FC = () => {
     }
 
     setFilteredActivities(filtered);
-  };
+  }, [activities, filters]);
 
-  const handleFilterChange = (key: keyof FilterOptions, value: string) => {
-    setFilters(prev => ({
-      ...prev,
-      [key]: value
-    }));
-  };
-
-  const clearFilters = () => {
-    setFilters({
-      dateFrom: '',
-      dateTo: '',
-      action: '',
-      userId: '',
-      search: ''
-    });
-  };
-
-  const exportToCSV = () => {
-    const csvContent = [
-      ['Date', 'User ID', 'Action', 'Description'],
-      ...filteredActivities.map(activity => [
-        new Date(activity.timestamp).toLocaleDateString(),
-        activity.user_id,
-        activity.action,
-        activity.description
-      ])
-    ].map(row => row.join(',')).join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `activities-report-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    window.URL.revokeObjectURL(url);
-  };
-
-  const getActionIcon = (action: string) => {
-    switch (action) {
-      case 'user_login':
-        return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case 'user_logout':
-        return <XCircle className="w-4 h-4 text-red-500" />;
-      case 'error':
-        return <AlertCircle className="w-4 h-4 text-red-500" />;
-      case 'warning':
-        return <AlertCircle className="w-4 h-4 text-yellow-500" />;
-      default:
-        return <Info className="w-4 h-4 text-blue-500" />;
-    }
-  };
-
-  const formatTimestamp = (timestamp: string) => {
-    return new Date(timestamp).toLocaleString('ar-SA', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
+  useEffect(() => {
+    applyFilters();
+  }, [applyFilters]);
 
   // Calculate stats
-  const totalActivities = activities.length;
   const uniqueUsers = new Set(activities.map(a => a.user_id)).size;
-  const todayActivities = activities.filter(a => 
+  const todayActivities = activities.filter(a =>
     new Date(a.timestamp).toDateString() === new Date().toDateString()
   ).length;
-  const loginCount = activities.filter(a => a.action === 'user_login').length;
-
-
 
   return (
     <div className="min-h-screen bg-gray-50 pt-16">
@@ -321,7 +231,25 @@ const Reports: React.FC = () => {
           {/* Export Button */}
           <div className="flex justify-between items-center mt-6">
             <button
-              onClick={exportToCSV}
+              onClick={() => {
+                const csvContent = [
+                  ['Date', 'User ID', 'Action', 'Description'],
+                  ...filteredActivities.map(activity => [
+                    new Date(activity.timestamp).toLocaleDateString(),
+                    activity.user_id,
+                    activity.action,
+                    activity.description
+                  ])
+                ].map(row => row.join(',')).join('\n');
+
+                const blob = new Blob([csvContent], { type: 'text/csv' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `activities-report-${new Date().toISOString().split('T')[0]}.csv`;
+                a.click();
+                window.URL.revokeObjectURL(url);
+              }}
               className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-teal-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-teal-700 transition-all duration-300 transform hover:scale-105"
             >
               <Download className="w-4 h-4 mr-2" />

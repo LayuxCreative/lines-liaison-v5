@@ -20,10 +20,11 @@ const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
 
   useEffect(() => {
     // Ensure proper cleanup on unmount
+    const currentRef = containerRef.current;
     return () => {
-      if (containerRef.current) {
+      if (currentRef) {
         // Clear any pending animations
-        containerRef.current.style.animation = 'none';
+        currentRef.style.animation = 'none';
       }
     };
   }, []);

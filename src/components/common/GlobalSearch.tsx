@@ -49,38 +49,42 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose }) => {
     const results: SearchResult[] = [];
 
     // Add projects from Supabase
-    userProjects.forEach((project) => {
-      results.push({
-        id: project.id,
-        title: project.name,
-        description: project.description,
-        type: "project",
-        url: `/dashboard/projects/${project.id}`,
-        metadata: {
-          status: project.status,
-          category: project.category,
-          date: project.startDate,
-        },
-      });
-    });
-
-    // Add files from Supabase
-    userProjects.forEach((project) => {
-      project.files.forEach((file) => {
+    if (userProjects && Array.isArray(userProjects)) {
+      userProjects.forEach((project) => {
         results.push({
-          id: file.id,
-          title: file.name,
-          description: `File in ${project.name}`,
-          type: "file",
-          url: `/dashboard/files`,
+          id: project.id,
+          title: project.name,
+          description: project.description,
+          type: "project",
+          url: `/dashboard/projects/${project.id}`,
           metadata: {
-            category: file.category,
-            size: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
-            date: file.uploadedAt,
+            status: project.status,
+            category: project.category,
+            date: project.startDate,
           },
         });
       });
-    });
+
+      // Add files from Supabase
+      userProjects.forEach((project) => {
+        if (project.files && Array.isArray(project.files)) {
+          project.files.forEach((file) => {
+            results.push({
+              id: file.id,
+              title: file.name,
+              description: `File in ${project.name}`,
+              type: "file",
+              url: `/dashboard/files`,
+              metadata: {
+                category: file.category,
+                size: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
+                date: file.uploadedAt,
+              },
+            });
+          });
+        }
+      });
+    }
 
     return results;
   }, [userProjects]);

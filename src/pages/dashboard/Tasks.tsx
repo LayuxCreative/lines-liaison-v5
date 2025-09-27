@@ -3,7 +3,6 @@ import { motion } from "framer-motion";
 import {
   Plus,
   Search,
-  Filter,
   Grid3X3,
   List,
   Calendar,
@@ -14,18 +13,14 @@ import {
   Pause,
   Play,
   MoreVertical,
-  Tag,
   Paperclip,
   MessageSquare,
   ExternalLink,
   Target,
-  TrendingUp,
-  Users,
-  FolderOpen,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useData } from "../../contexts/DataContext";
-import { Task } from "../../types";
+
 import { format, formatDistanceToNow } from "date-fns";
 
 // Utility function to check if a task is overdue
@@ -35,7 +30,7 @@ const isOverdue = (dueDate: Date): boolean => {
 
 const Tasks: React.FC = () => {
   const { user } = useAuth();
-  const { getProjectsByUser, getTasksByUser, tasks } = useData();
+  const { getProjectsByUser, tasks } = useData();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
@@ -46,25 +41,7 @@ const Tasks: React.FC = () => {
 
   const userProjects = user ? getProjectsByUser(user.id, user.role) : [];
 
-  if (!user) return null;
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "todo":
-        return Clock;
-      case "in_progress":
-        return Play;
-      case "review":
-        return AlertCircle;
-      case "completed":
-        return CheckCircle;
-      case "blocked":
-        return Pause;
-      default:
-        return Clock;
-    }
-  };
-
+  // Remove unused getStatusIcon function
   const getStatusColor = (status: string) => {
     switch (status) {
       case "todo":
@@ -202,6 +179,8 @@ const Tasks: React.FC = () => {
     (assignee, index, self) =>
       self.findIndex((a) => a.id === assignee.id) === index,
   );
+
+  if (!user) return null;
 
   return (
     <div className="min-h-screen bg-gray-50 pt-16">
@@ -435,7 +414,7 @@ const Tasks: React.FC = () => {
             {viewMode === "grid" ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredTasks.map((task, index) => {
-                  const StatusIcon = getStatusIcon(task.status);
+                  // Remove unused StatusIcon variable
                   const isTaskOverdue =
                     task.status !== "completed" && isOverdue(task.dueDate);
                   const project = userProjects.find(
@@ -591,7 +570,7 @@ const Tasks: React.FC = () => {
                     </thead>
                     <tbody className="divide-y divide-gray-200">
                       {filteredTasks.map((task) => {
-                        const StatusIcon = getStatusIcon(task.status);
+                        // Remove unused StatusIcon variable
                         const isTaskOverdue =
                           task.status !== "completed" &&
                           isOverdue(task.dueDate);
@@ -645,7 +624,12 @@ const Tasks: React.FC = () => {
                             </td>
                             <td className="px-6 py-4">
                               <div className="flex items-center space-x-2">
-                                <StatusIcon className="w-4 h-4" />
+                                {/* Remove StatusIcon and use appropriate icon based on status */}
+                                {task.status === "todo" && <Clock className="w-4 h-4 text-gray-400" />}
+                                {task.status === "in_progress" && <Play className="w-4 h-4 text-blue-400" />}
+                                {task.status === "review" && <AlertCircle className="w-4 h-4 text-yellow-400" />}
+                                {task.status === "completed" && <CheckCircle className="w-4 h-4 text-green-400" />}
+                                {task.status === "blocked" && <Pause className="w-4 h-4 text-red-400" />}
                                 <span
                                   className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}
                                 >

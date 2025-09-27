@@ -268,20 +268,13 @@ This document outlines the comprehensive plan for implementing an open-source, f
 
 ## Cost Analysis
 
-### Development Costs
-- Initial development: 5-6 weeks
-- Ongoing maintenance: 20% of development time
-- No licensing fees (open source)
+### Infrastructure Costs (Operational)
 
-### Infrastructure Costs
-- Supabase hosting: $25-100/month
-- Server hosting: $50-200/month
-- CDN costs: $10-50/month
+**Monthly Operational Costs:**
+- **Supabase Pro Plan:** $25/month (up to 100,000 monthly active users)
 
-### Total Cost Comparison
-- **Custom Solution**: $85-350/month + development time
-- **Microsoft Teams**: $4-22/user/month (for 50 users = $200-1100/month)
-- **Break-even**: 3-6 months depending on team size
+**Total Monthly:** $25
+**Annual:** $300
 
 ## Success Metrics
 

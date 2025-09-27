@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Shield, Users, Settings, FileText, MessageSquare, BarChart3 } from 'lucide-react';
-import { supabaseService } from '../../services/supabaseService';
+import { nodeApiService } from '../../services/nodeApiService';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Role, PermissionItem } from '../../types';
@@ -27,7 +27,7 @@ const CreateRoleModal: React.FC<CreateRoleModalProps> = ({ onClose, onRoleCreate
   // Load permissions from database
   useEffect(() => {
     loadPermissions();
-  }, []);
+  }, [loadPermissions]);
 
   // Initialize role data when editingRole changes
   useEffect(() => {
@@ -51,8 +51,12 @@ const CreateRoleModal: React.FC<CreateRoleModalProps> = ({ onClose, onRoleCreate
   const loadPermissions = async () => {
     try {
       setIsLoadingPermissions(true);
-      const permissions = await supabaseService.getPermissions();
-      setAvailablePermissions(permissions);
+      const response = await nodeApiService.getPermissions();
+      if (response.success && response.data) {
+        setAvailablePermissions(response.data);
+      } else {
+        throw new Error(response.error || 'Failed to load permissions');
+      }
     } catch (error) {
       console.error('Error loading permissions:', error);
       addNotification({
@@ -143,13 +147,19 @@ const CreateRoleModal: React.FC<CreateRoleModalProps> = ({ onClose, onRoleCreate
       
       if (editingRole) {
         // Update existing role
-        result = await supabaseService.updateRole(editingRole.id, {
+        const updateResponse = await nodeApiService.updateRole(editingRole.id, {
           name: roleData.name,
           display_name: roleData.name,
           description: roleData.description,
           permissions: roleData.permissions,
           is_active: true
         });
+        
+        if (!updateResponse.success || !updateResponse.data) {
+          throw new Error(updateResponse.error || 'Failed to update role');
+        }
+        
+        result = updateResponse.data;
         
         addNotification({
           type: 'success',
@@ -160,13 +170,19 @@ const CreateRoleModal: React.FC<CreateRoleModalProps> = ({ onClose, onRoleCreate
         });
       } else {
         // Create new role
-        result = await supabaseService.createRole({
+        const createResponse = await nodeApiService.createRole({
           name: roleData.name,
           display_name: roleData.name,
           description: roleData.description,
           permissions: roleData.permissions,
           is_active: true
         });
+        
+        if (!createResponse.success || !createResponse.data) {
+          throw new Error(createResponse.error || 'Failed to create role');
+        }
+        
+        result = createResponse.data;
         
         addNotification({
           type: 'success',

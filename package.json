@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.18.2",
     "@supabase/supabase-js": "^2.57.4",
     "@types/react-router-dom": "^5.3.3",
     "@uppy/core": "^4.5.3",
@@ -20,6 +21,8 @@
     "@uppy/status-bar": "^4.2.3",
     "@uppy/tus": "^4.3.2",
     "@uppy/xhr-upload": "^4.4.2",
+    "axios": "^1.12.2",
+    "bcrypt": "^6.0.0",
     "caniuse-lite": "^1.0.30001743",
     "clsx": "^2.1.1",
     "cors": "^2.8.5",

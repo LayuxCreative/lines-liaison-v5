@@ -19,15 +19,15 @@ interface UserPresenceProps {
 const UserPresence: React.FC<UserPresenceProps> = ({
   currentUser,
 }) => {
-  // Use onlineUsers for future implementation
-  const onlineUsers: User[] = [];
   const [users, setUsers] = useState<User[]>([]);
   const [showUserList, setShowUserList] = useState(false);
 
   useEffect(() => {
+    // Use onlineUsers for future implementation
+    const onlineUsers: User[] = [];
     // Use real users data from props
     setUsers(onlineUsers);
-  }, [onlineUsers]);
+  }, []);
 
   const getStatusColor = (status: User["status"]) => {
     switch (status) {

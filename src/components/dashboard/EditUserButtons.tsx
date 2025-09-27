@@ -3,7 +3,7 @@ import { UserMinus } from 'lucide-react';
 import { User as UserType } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotifications } from '../../contexts/NotificationContext';
-import { supabaseService } from '../../services/supabaseService';
+import { nodeApiService } from '../../services/nodeApiService';
 
 interface EditUserButtonsProps {
   editingUser: UserType;
@@ -41,9 +41,10 @@ const EditUserButtons: React.FC<EditUserButtonsProps> = ({
         additionalPermissions: editingUser.additionalPermissions || []
       };
 
-      await supabaseService.updateUser(editingUser.id, updateData);
+      await nodeApiService.updateUser(editingUser.id, updateData);
       
-      const updatedUsers = await supabaseService.getUsers();
+      const response = await nodeApiService.getUsers();
+      const updatedUsers = response.data || [];
       setUsers(updatedUsers);
 
       addNotification({
@@ -69,9 +70,10 @@ const EditUserButtons: React.FC<EditUserButtonsProps> = ({
 
   const handleDeleteUser = async () => {
     try {
-      await supabaseService.deleteUser(editingUser.id);
+      await nodeApiService.deleteUser(editingUser.id);
       
-      const updatedUsers = await supabaseService.getUsers();
+      const response = await nodeApiService.getUsers();
+      const updatedUsers = response.data || [];
       setUsers(updatedUsers);
 
       addNotification({

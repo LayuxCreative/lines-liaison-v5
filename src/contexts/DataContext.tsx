@@ -1,25 +1,29 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { Project, ProjectFile, Message, Task } from "../types";
-import { supabase } from '../config/unifiedSupabase';
-import { supabaseStorageService } from "../services/supabaseStorageService";
+import { nodeApiService } from "../services/nodeApiService";
 import { useAuth } from "./AuthContext";
-import { activityLogger } from "../utils/activityLogger";
+
+// Import FileData interface from nodeApiService
+interface FileData {
+  id: string;
+  name: string;
+  url: string;
+  size: number;
+  type: string;
+}
 
 interface DataContextType {
   projects: Project[];
   files: ProjectFile[];
   messages: Message[];
   tasks: Task[];
-  loadProjects: () => Promise<void>;
-  loadFiles: () => Promise<void>;
+  loadProjects: (userId?: string) => Promise<void>;
+  loadFiles: (projectId: string) => Promise<void>;
   loadTasks: () => Promise<void>;
   loadMessages: () => Promise<void>;
   addProject: (project: Omit<Project, "id" | "createdAt">) => Promise<void>;
   updateProject: (id: string, updates: Partial<Project>) => void;
-  addProjectFile: (
-    projectId: string,
-    file: File,
-  ) => Promise<ProjectFile | undefined>;
+  addProjectFile: (projectId: string, file: File) => Promise<ProjectFile | undefined>;
   addMessage: (message: Omit<Message, "id" | "timestamp">) => Promise<void>;
   addTask: (task: Omit<Task, "id" | "createdAt">) => Promise<void>;
   updateTask: (id: string, updates: Partial<Task>) => void;
@@ -30,630 +34,296 @@ interface DataContextType {
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-// Helper functions for Supabase data conversion
-const convertSupabaseProject = (data: Record<string, unknown>): Project => {
-  return {
-    id: data.id as string,
-    name: data.name as string,
-    description: data.description as string,
-    status: data.status as Project['status'],
-    priority: data.priority as Project['priority'],
-    clientId: data.client_id as string,
-    managerId: data.manager_id as string,
-    teamMembers: (data.team_members as string[]) || [],
-    startDate: new Date(data.start_date as string),
-    endDate: data.end_date ? new Date(data.end_date as string) : new Date(),
-    progress: (data.progress as number) || 0,
-    budget: (data.budget as number) || 0,
-    spent: (data.spent as number) || 0,
-    category: data.category as Project['category'],
-    files: [], // Will be loaded separately
-    createdAt: new Date(data.created_at as string),
-  };
-};
-
-const convertSupabaseFile = (data: Record<string, unknown>): ProjectFile => {
-  return {
-    id: data.id as string,
-    name: data.name as string,
-    type: data.type as string,
-    size: data.size as number,
-    url: (data.url as string) || "",
-    projectId: data.project_id as string,
-    uploadedBy: data.uploaded_by as string,
-    uploadedAt: new Date(data.uploaded_at as string),
-    lastModified: new Date((data.last_modified as string) || (data.uploaded_at as string)),
-    lastModifiedBy: (data.last_modified_by as string) || (data.uploaded_by as string),
-    category: data.category as ProjectFile['category'],
-    isApproved: (data.is_approved as boolean) || false,
-    version: (data.version as number) || 1,
-    thumbnail: data.thumbnail as string,
-    description: (data.description as string) || "",
-    tags: (data.tags as string[]) || [],
-    activity: [], // Will be loaded separately
-    versions: [], // Will be loaded separately
-    viewCount: (data.view_count as number) || 0,
-    downloadCount: (data.download_count as number) || 0,
-  };
-};
-
-const convertSupabaseTask = (data: Record<string, unknown>): Task => {
-  return {
-    id: data.id as string,
-    projectId: data.project_id as string,
-    title: data.title as string,
-    description: data.description as string,
-    status: data.status as Task['status'],
-    priority: data.priority as Task['priority'],
-    assigneeId: data.assignee_id as string,
-    assigneeName: (data.assignee_name as string) || "",
-    createdBy: data.created_by as string,
-    createdAt: new Date(data.created_at as string),
-    dueDate: data.due_date ? new Date(data.due_date as string) : new Date(),
-    completedAt: data.completed_at ? new Date(data.completed_at as string) : undefined,
-    estimatedHours: data.estimated_hours as number,
-    actualHours: data.actual_hours as number,
-    tags: (data.tags as string[]) || [],
-    attachedFiles: (data.attached_files as string[]) || [],
-    dependencies: (data.dependencies as string[]) || [],
-    comments: [], // Will be loaded separately
-    clickUpTaskId: data.clickup_task_id as string,
-    clickUpUrl: data.clickup_url as string,
-  };
-};
-
-const convertSupabaseMessage = (data: Record<string, unknown>): Message => {
-  return {
-    id: data.id as string,
-    projectId: data.project_id as string,
-    senderId: data.sender_id as string,
-    content: data.content as string,
-    timestamp: new Date(data.timestamp as string),
-    type: data.type as Message['type'],
-    attachments: (data.attachments as string[]) || [],
-  };
-};
-
-export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
-  // addActivity is available via useActivity() hook when needed
   const [projects, setProjects] = useState<Project[]>([]);
   const [files, setFiles] = useState<ProjectFile[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
-  // Load projects from Supabase with optimization
-  const loadProjects = async () => {
-    if (!user) return;
-
+  const loadProjects = async (userId?: string) => {
     try {
-      // Limit initial load to recent projects for faster response
-      const { data, error } = await supabase
-        .from("projects")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(20);
-
-      if (error) throw error;
-
-      const convertedProjects = data?.map(convertSupabaseProject) || [];
-      setProjects(convertedProjects);
+      const targetUserId = userId || user?.id;
+      if (!targetUserId) {
+        console.warn('DataContext: No user ID available for loading projects');
+        return;
+      }
+      console.log('DataContext: Calling nodeApiService.getProjects with:', targetUserId);
+      const response = await nodeApiService.getProjects(targetUserId);
+      console.log('DataContext: getProjects response:', response);
+      
+      // Handle the response format correctly
+      if (response.success && response.data) {
+        const projectsData = Array.isArray(response.data) ? response.data : [];
+        setProjects(projectsData);
+        console.log('DataContext: Projects set successfully, count:', projectsData.length);
+      } else {
+        console.warn('DataContext: No projects data received');
+        setProjects([]);
+      }
     } catch (error) {
-      console.error("Error loading projects:", error);
+      console.error('DataContext: Error loading projects:', error);
+      setProjects([]);
     }
   };
 
-  // Load files from Supabase
-  const loadFiles = async () => {
+  const loadFiles = async (projectId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('files')
-        .select(`
-          *,
-          uploaded_by_user:profiles!files_uploaded_by_fkey(id, full_name, email)
-        `)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error loading files:', error);
-        return;
+      const response = await nodeApiService.getFiles(projectId);
+      // Convert FileData to ProjectFile format
+      if (response.success && response.data) {
+        const filesData = Array.isArray(response.data) ? response.data : [];
+        const convertedFiles: ProjectFile[] = filesData.map((file: FileData) => ({
+          id: file.id,
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          url: file.url,
+          projectId: projectId,
+          uploadedBy: '',
+          uploadedAt: new Date(),
+          lastModified: new Date(),
+          lastModifiedBy: '',
+          category: 'other' as const,
+          isApproved: false,
+          version: 1,
+          thumbnail: undefined,
+          isExternal: false,
+          externalUrl: undefined,
+          description: undefined,
+          tags: [],
+          activity: [],
+          versions: [],
+          viewCount: 0,
+          downloadCount: 0
+        }));
+        setFiles(convertedFiles);
+      } else {
+        setFiles([]);
       }
-
-      const convertedFiles = data?.map(convertSupabaseFile) || [];
-      setFiles(convertedFiles);
     } catch (error) {
-      console.error('Error in loadFiles:', error);
+      console.error('Error loading files:', error);
+      setFiles([]);
     }
   };
 
   const loadTasks = async () => {
     try {
-      const { data, error } = await supabase
-        .from('tasks')
-        .select(`
-          *,
-          assigned_user:profiles!tasks_assigned_to_fkey(id, full_name, email),
-          created_by_user:profiles!tasks_created_by_fkey(id, full_name, email)
-        `)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error loading tasks:', error);
-        return;
+      console.log('DataContext: Loading tasks...');
+      const response = await nodeApiService.getTasks();
+      console.log('DataContext: getTasks response:', response);
+      
+      // Handle the response format correctly
+      if (response.success && response.data) {
+        const tasksData = Array.isArray(response.data) ? response.data : [];
+        setTasks(tasksData);
+        console.log('DataContext: Tasks set successfully, count:', tasksData.length);
+      } else {
+        console.warn('DataContext: No tasks data received');
+        setTasks([]);
       }
-
-      const convertedTasks = data?.map(convertSupabaseTask) || [];
-      setTasks(convertedTasks);
     } catch (error) {
-      console.error('Error in loadTasks:', error);
+      console.error('DataContext: Error loading tasks:', error);
+      setTasks([]);
     }
   };
 
   const loadMessages = async () => {
     try {
-      const { data, error } = await supabase
-        .from('messages')
-        .select(`
-          *,
-          sender:profiles!messages_sender_id_fkey(id, full_name, email)
-        `)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error loading messages:', error);
-        return;
+      console.log('DataContext: Loading messages...');
+      const response = await nodeApiService.getMessages();
+      console.log('DataContext: getMessages response:', response);
+      
+      // Handle the response format correctly
+      if (response.success && response.data) {
+        const messagesData = Array.isArray(response.data) ? response.data : [];
+        setMessages(messagesData);
+        console.log('DataContext: Messages set successfully, count:', messagesData.length);
+      } else {
+        console.warn('DataContext: No messages data received');
+        setMessages([]);
       }
-
-      const convertedMessages = data?.map(convertSupabaseMessage) || [];
-      setMessages(convertedMessages);
     } catch (error) {
-      console.error('Error in loadMessages:', error);
-    }
-  };
-
-  // Load essential data when user logs in with timeout handling
-  useEffect(() => {
-    if (user) {
-      setIsLoading(true);
-      
-      // Load data with timeout handling to avoid dependency loops
-      const fetchWithTimeout = async (fetchFunction: () => Promise<void>, timeout = 10000) => {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
-        
-        try {
-          await fetchFunction();
-          clearTimeout(timeoutId);
-        } catch (error) {
-          clearTimeout(timeoutId);
-          if (error instanceof Error && error.name === 'AbortError') {
-            throw new Error('Connection timeout - please check your network');
-          }
-          throw error;
-        }
-      };
-
-      Promise.all([
-        fetchWithTimeout(loadProjects),
-        fetchWithTimeout(loadTasks),
-        fetchWithTimeout(loadFiles),
-        fetchWithTimeout(loadMessages)
-      ]).then(() => {
-        setIsLoading(false);
-      }).catch((error) => {
-        console.error('❌ DataContext: Error loading data:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Failed to load data';
-        
-        // Show user-friendly timeout message
-        if (errorMessage.includes('timeout') || errorMessage.includes('Connection timeout')) {
-          console.error('Connection timeout - please check your internet connection and try again');
-        }
-        
-        setIsLoading(false);
-      });
-    } else {
-      console.log('🚪 DataContext: User logged out, clearing data...');
-      setProjects([]);
-      setFiles([]);
+      console.error('DataContext: Error loading messages:', error);
       setMessages([]);
-      setTasks([]);
-      setIsLoading(false);
     }
-  }, [user]);
+  };
 
-  // Add project function
   const addProject = async (projectData: Omit<Project, "id" | "createdAt">) => {
-    if (!user) return;
-
     try {
-      await activityLogger.log("project_create", "info", "Creating new project", {
-        projectName: projectData.name,
-        category: projectData.category,
-        priority: projectData.priority
-      });
-
-      const { data, error } = await supabase
-        .from("projects")
-        .insert({
-          name: projectData.name,
-          description: projectData.description,
-          status: projectData.status,
-          priority: projectData.priority,
-          client_id: projectData.clientId,
-          manager_id: projectData.managerId,
-          team_members: projectData.teamMembers,
-          start_date: projectData.startDate.toISOString(),
-          end_date: projectData.endDate?.toISOString(),
-          progress: projectData.progress,
-          budget: projectData.budget,
-          spent: projectData.spent,
-          category: projectData.category,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      const newProject = convertSupabaseProject(data);
-      setProjects((prev) => [newProject, ...prev]);
-      
-      await activityLogger.log("project_create", "success", "Project created successfully", {
-        projectId: newProject.id,
-        projectName: projectData.name
-      });
+      const response = await nodeApiService.createProject(projectData);
+      if (response.data) {
+        setProjects(prev => [...prev, response.data!]);
+      }
     } catch (error) {
-      console.error("Error adding project:", error);
-      await activityLogger.log("project_create", "error", "Failed to create project", {
-        projectName: projectData.name,
-        error: error instanceof Error ? error.message : "Unknown error"
-      });
-    }
-  };
-
-  // Update project function
-  const updateProject = async (id: string, updates: Partial<Project>) => {
-    try {
-      const updatedFields = Object.keys(updates);
-      await activityLogger.log("project_update", "info", "Updating project", {
-        projectId: id,
-        updatedFields
-      });
-
-      const updateData: Record<string, unknown> = {};
-
-      if (updates.name) updateData.name = updates.name;
-      if (updates.description) updateData.description = updates.description;
-      if (updates.status) updateData.status = updates.status;
-      if (updates.priority) updateData.priority = updates.priority;
-      if (updates.progress !== undefined)
-        updateData.progress = updates.progress;
-      if (updates.budget !== undefined) updateData.budget = updates.budget;
-      if (updates.spent !== undefined) updateData.spent = updates.spent;
-      if (updates.startDate)
-        updateData.start_date = updates.startDate.toISOString();
-      if (updates.endDate) updateData.end_date = updates.endDate.toISOString();
-
-      const { error } = await supabase
-        .from("projects")
-        .update(updateData)
-        .eq("id", id);
-
-      if (error) throw error;
-
-      setProjects((prev) =>
-        prev.map((project) =>
-          project.id === id ? { ...project, ...updates } : project,
-        ),
-      );
-
-      await activityLogger.log("project_update", "success", "Project updated successfully", {
-        projectId: id,
-        updatedFields
-      });
-    } catch (error) {
-      console.error("Error updating project:", error);
-      await activityLogger.log("project_update", "error", "Failed to update project", {
-        projectId: id,
-        error: error instanceof Error ? error.message : "Unknown error"
-      });
-    }
-  };
-
-  // Add file function with Supabase Storage
-  const addProjectFile = async (
-    projectId: string,
-    file: File,
-  ): Promise<ProjectFile | undefined> => {
-    if (!user) return;
-
-    try {
-      const uploadedFile = await supabaseStorageService.uploadFile(
-        file,
-        projectId,
-      );
-
-      const newFile: ProjectFile = {
-        id: uploadedFile.id,
-        name: uploadedFile.name,
-        type: uploadedFile.type,
-        size: uploadedFile.size,
-        url: uploadedFile.url,
-        projectId: projectId,
-        uploadedBy: user.id,
-        uploadedAt: uploadedFile.uploadedAt,
-        lastModified: uploadedFile.uploadedAt,
-        lastModifiedBy: user.id,
-        category: "document",
-        isApproved: false,
-        version: 1,
-        thumbnail: "",
-        description: "",
-        tags: [],
-        activity: [],
-        versions: [],
-        viewCount: 0,
-        downloadCount: 0,
-      };
-
-      setFiles((prev) => [newFile, ...prev]);
-      return newFile;
-    } catch (error) {
-      console.error("Error adding file:", error);
+      console.error('Error adding project:', error);
       throw error;
     }
   };
 
-  // Add task function
-  const addTask = async (taskData: Omit<Task, "id" | "createdAt">) => {
-    if (!user) return;
-
+  const updateProject = async (id: string, updates: Partial<Project>) => {
     try {
-      await activityLogger.log("task_create", "info", "Creating new task", {
-        projectId: taskData.projectId,
-        taskTitle: taskData.title,
-        priority: taskData.priority
-      });
-
-      const { data, error } = await supabase
-        .from("tasks")
-        .insert({
-          project_id: taskData.projectId,
-          title: taskData.title,
-          description: taskData.description,
-          status: taskData.status,
-          priority: taskData.priority,
-          assignee_id: taskData.assigneeId,
-          assignee_name: taskData.assigneeName,
-          created_by: user.id,
-          due_date: taskData.dueDate?.toISOString(),
-          estimated_hours: taskData.estimatedHours,
-          tags: taskData.tags,
-          attached_files: taskData.attachedFiles,
-          dependencies: taskData.dependencies,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      const newTask = convertSupabaseTask(data);
-      setTasks((prev) => [newTask, ...prev]);
-      
-      await activityLogger.log("task_create", "success", "Task created successfully", {
-        taskId: newTask.id,
-        projectId: taskData.projectId,
-        taskTitle: taskData.title
-      });
+      const response = await nodeApiService.updateProject(id, updates);
+      if (response.data) {
+        setProjects(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
+      }
     } catch (error) {
-      console.error("Error adding task:", error);
-      await activityLogger.log("task_create", "error", "Failed to create task", {
-        projectId: taskData.projectId,
-        error: error instanceof Error ? error.message : "Unknown error"
-      });
+      console.error('Error updating project:', error);
+      throw error;
     }
   };
 
-  // Update task function
+  const addProjectFile = async (projectId: string, file: File): Promise<ProjectFile | undefined> => {
+    try {
+      const response = await nodeApiService.uploadFile(file, projectId);
+      if (response.data) {
+        // Convert FileData to ProjectFile
+        const fileData = response.data;
+        const convertedFile: ProjectFile = {
+          id: fileData.id,
+          name: fileData.name,
+          type: fileData.type,
+          size: fileData.size,
+          url: fileData.url,
+          projectId: projectId,
+          uploadedBy: '',
+          uploadedAt: new Date(),
+          lastModified: new Date(),
+          lastModifiedBy: '',
+          category: 'other' as const,
+          isApproved: false,
+          version: 1,
+          thumbnail: undefined,
+          isExternal: false,
+          externalUrl: undefined,
+          description: undefined,
+          tags: [],
+          activity: [],
+          versions: [],
+          viewCount: 0,
+          downloadCount: 0
+        };
+        setFiles(prev => [...prev, convertedFile]);
+        return convertedFile;
+      }
+    } catch (error) {
+      console.error('Error adding file:', error);
+      throw error;
+    }
+    return undefined;
+  };
+
+  const addMessage = async (message: Omit<Message, "id" | "timestamp">) => {
+    try {
+      const response = await nodeApiService.createMessage(message);
+      if (response.data) {
+        setMessages(prev => [...prev, response.data!]);
+      }
+    } catch (error) {
+      console.error('Error adding message:', error);
+      throw error;
+    }
+  };
+
+  const addTask = async (task: Omit<Task, "id" | "createdAt">) => {
+    try {
+      const response = await nodeApiService.createTask(task);
+      if (response.data) {
+        setTasks(prev => [...prev, response.data!]);
+      }
+    } catch (error) {
+      console.error('Error adding task:', error);
+      throw error;
+    }
+  };
+
   const updateTask = async (id: string, updates: Partial<Task>) => {
     try {
-      const updatedFields = Object.keys(updates);
-      await activityLogger.log("task_update", "info", "Updating task", {
-        taskId: id,
-        updatedFields
-      });
-
-      const updateData: Record<string, unknown> = {};
-
-      if (updates.title) updateData.title = updates.title;
-      if (updates.description) updateData.description = updates.description;
-      if (updates.status) updateData.status = updates.status;
-      if (updates.priority) updateData.priority = updates.priority;
-      if (updates.assigneeId) updateData.assignee_id = updates.assigneeId;
-      if (updates.assigneeName) updateData.assignee_name = updates.assigneeName;
-      if (updates.dueDate) updateData.due_date = updates.dueDate.toISOString();
-      if (updates.completedAt)
-        updateData.completed_at = updates.completedAt.toISOString();
-      if (updates.estimatedHours !== undefined)
-        updateData.estimated_hours = updates.estimatedHours;
-      if (updates.actualHours !== undefined)
-        updateData.actual_hours = updates.actualHours;
-
-      const { error } = await supabase
-        .from("tasks")
-        .update(updateData)
-        .eq("id", id);
-
-      if (error) throw error;
-
-      setTasks((prev) =>
-        prev.map((task) => (task.id === id ? { ...task, ...updates } : task)),
-      );
-
-      await activityLogger.log("task_update", "success", "Task updated successfully", {
-        taskId: id,
-        updatedFields
-      });
-    } catch (error) {
-      console.error("Error updating task:", error);
-      await activityLogger.log("task_update", "error", "Failed to update task", {
-        taskId: id,
-        error: error instanceof Error ? error.message : "Unknown error"
-      });
-    }
-  };
-
-  // Placeholder functions for messages and activities
-  const addMessage = async (message: Omit<Message, "id" | "timestamp">) => {
-    if (!user) return;
-
-    try {
-      await activityLogger.log("message_create", "info", "Creating new message", {
-        projectId: message.projectId,
-        senderId: message.senderId,
-        messageType: message.type,
-        contentLength: message.content.length
-      });
-
-      const newMessage: Message = {
-        ...message,
-        id: Date.now().toString(),
-        timestamp: new Date(),
-      };
-      
-      // Save to Supabase first
-      const { error } = await supabase
-        .from("messages")
-        .insert({
-          id: newMessage.id,
-          project_id: newMessage.projectId,
-          sender_id: newMessage.senderId,
-          content: newMessage.content,
-          timestamp: newMessage.timestamp.toISOString(),
-          type: newMessage.type,
-          attachments: newMessage.attachments || [],
-        });
-     
-      if (error) {
-        console.error("Error saving message to Supabase:", error);
-        await activityLogger.log("message_create", "error", "Failed to save message to database", {
-          projectId: message.projectId,
-          senderId: message.senderId,
-          error: error.message
-        });
-        return;
+      const response = await nodeApiService.updateTask(id, updates);
+      if (response.data) {
+        setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
       }
-      
-      // Only add to local state if Supabase save was successful
-      setMessages((prev) => [newMessage, ...prev]);
-      
-      await activityLogger.log("message_create", "success", "Message created successfully", {
-        messageId: newMessage.id,
-        projectId: message.projectId,
-        senderId: message.senderId
-      });
     } catch (error) {
-      console.error("Error saving message:", error);
-      await activityLogger.log("message_create", "error", "Failed to create message", {
-        projectId: message.projectId,
-        senderId: message.senderId,
-        error: error instanceof Error ? error.message : "Unknown error"
-      });
+      console.error('Error updating task:', error);
+      throw error;
     }
   };
 
-  // addActivity is now provided by useActivity()
-
-  // Helper functions
   const getProjectsByUser = (userId: string, userRole: string): Project[] => {
-    if (userRole === "admin") {
+    if (userRole === 'admin') {
       return projects;
     }
-    return projects.filter(
-      (project) =>
-        project.managerId === userId || project.teamMembers.includes(userId),
+    return projects.filter(project => 
+      project.managerId === userId || 
+      project.teamMembers?.includes(userId)
     );
   };
 
   const getTasksByProject = (projectId: string): Task[] => {
-    return tasks.filter((task) => task.projectId === projectId);
+    return tasks.filter(task => task.projectId === projectId);
   };
 
   const getTasksByUser = (userId: string, userRole: string): Task[] => {
-    if (userRole === "admin") {
+    if (userRole === 'admin') {
       return tasks;
     }
-    return tasks.filter(
-      (task) => task.assigneeId === userId || task.createdBy === userId,
-    );
+    return tasks.filter(task => task.assigneeId === userId);
   };
 
-  if (isLoading) {
-    return (
-      <DataContext.Provider
-        value={{
-          projects: [],
-      files: [],
-      messages: [],
-      tasks: [],
-      loadProjects,
-      loadFiles,
-      loadTasks,
-      loadMessages,
-      addProject,
-      updateProject,
-      addProjectFile,
-      addMessage,
-      addTask,
-      updateTask,
-      getProjectsByUser,
-      getTasksByProject,
-      getTasksByUser,
-        }}
-      >
-        {children}
-      </DataContext.Provider>
-    );
-  }
+  // Load initial data when user is available
+  useEffect(() => {
+    const loadInitialData = async () => {
+      console.log('DataContext: loadInitialData called, user:', user);
+      if (!user?.id) {
+        console.log('DataContext: No user ID available, skipping data load');
+        return;
+      }
+      
+      console.log('DataContext: Loading data for user:', user.id);
+      try {
+        await Promise.all([
+          loadProjects(user.id),
+          loadTasks(),
+          loadMessages()
+        ]);
+        console.log('DataContext: Initial data loaded successfully');
+      } catch (error) {
+        console.error('DataContext: Error loading initial data:', error);
+      }
+    };
 
-  return (
-    <DataContext.Provider
-      value={{
-      projects,
-      files,
-      messages,
-      tasks,
-      loadProjects,
-      loadFiles,
-      loadTasks,
-      loadMessages,
-      addProject,
-      updateProject,
-      addProjectFile,
-      addMessage,
-      addTask,
-      updateTask,
-      getProjectsByUser,
-      getTasksByProject,
-      getTasksByUser,
-    }}
-    >
-      {children}
-    </DataContext.Provider>
-  );
+    loadInitialData();
+  }, [user?.id]);
+
+  const value: DataContextType = {
+    projects,
+    files,
+    messages,
+    tasks,
+    loadProjects,
+    loadFiles,
+    loadTasks,
+    loadMessages,
+    addProject,
+    updateProject,
+    addProjectFile,
+    addMessage,
+    addTask,
+    updateTask,
+    getProjectsByUser,
+    getTasksByProject,
+    getTasksByUser,
+  };
+
+  return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 };
 
-// Fix Fast Refresh compatibility
-// Export hook with consistent naming for Fast Refresh compatibility
 export function useData() {
   const context = useContext(DataContext);
-  if (!context) {
+  if (context === undefined) {
     throw new Error("useData must be used within a DataProvider");
   }
   return context;
 }
 
-// Add displayName for Fast Refresh compatibility
 useData.displayName = 'useData';

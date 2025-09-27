@@ -12,10 +12,10 @@ import {
   Linkedin,
   MessageSquare,
 } from "lucide-react";
-import { useAuth } from "../contexts/AuthContext";
+
 
 const Contact: React.FC = () => {
-  const { user } = useAuth();
+  // Auth context not used on Contact page
   const [formData, setFormData] = useState({
     name: "",
     email: "",

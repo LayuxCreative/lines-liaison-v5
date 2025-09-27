@@ -27,9 +27,9 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
   };
 
   const getStatusText = () => {
-    if (status.isReconnecting) return `إعادة الاتصال... (${status.reconnectAttempts}/10)`;
-    if (status.isConnected) return 'متصل';
-    return 'غير متصل';
+    if (status.isReconnecting) return `Reconnecting... (${status.reconnectAttempts}/10)`;
+    if (status.isConnected) return 'Connected';
+    return 'Disconnected';
   };
 
   const formatUptime = (seconds: number) => {
@@ -62,7 +62,7 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
           <button
             onClick={forceReconnect}
             className="ml-2 p-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors"
-            title="إعادة الاتصال"
+            title="Reconnect"
           >
             <RefreshCw className="w-3 h-3" />
           </button>
@@ -83,33 +83,31 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
               <div className="space-y-2">
                 <h4 className="font-semibold text-gray-300 flex items-center gap-2">
                   <CheckCircle className="w-4 h-4" />
-                  معلومات الاتصال
+                  Connection Info
                 </h4>
                 
                 <div className="space-y-1 text-gray-400">
                   <div className="flex justify-between">
-                    <span>الحالة:</span>
+                    <span>Status:</span>
                     <span className={getStatusColor()}>{getStatusText()}</span>
                   </div>
                   
                   <div className="flex justify-between">
-                    <span>زمن الاستجابة:</span>
-                    <span>{status.responseTime}ms</span>
-                  </div>
-                  
-                  <div className="flex justify-between">
-                    <span>آخر فحص:</span>
-                    <span>
-                      {status.lastCheck 
-                        ? status.lastCheck.toLocaleTimeString('ar-SA')
-                        : 'لم يتم'
-                      }
-                    </span>
-                  </div>
-                  
-                  {status.lastError && (
+                      <span>Response Time:</span>
+                      <span>{status.responseTime}ms</span>
+                    </div>
                     <div className="flex justify-between">
-                      <span>آخر خطأ:</span>
+                      <span>Last Check:</span>
+                      <span>
+                        {status.lastCheck 
+                          ? new Date(status.lastCheck).toLocaleTimeString('en-US')
+                          : 'Never'
+                        }
+                      </span>
+                    </div>
+                    {status.lastError && (
+                      <div className="flex justify-between">
+                        <span>Last Error:</span>
                       <span className="text-red-400 text-xs truncate max-w-32" title={status.lastError}>
                         {status.lastError}
                       </span>
@@ -122,35 +120,35 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
               <div className="space-y-2">
                 <h4 className="font-semibold text-gray-300 flex items-center gap-2">
                   <RefreshCw className="w-4 h-4" />
-                  إحصائيات
+                  Statistics
                 </h4>
                 
                 <div className="space-y-1 text-gray-400">
                   <div className="flex justify-between">
-                    <span>وقت التشغيل:</span>
+                    <span>Uptime:</span>
                     <span>{formatUptime(metrics.uptime)}</span>
                   </div>
                   
                   <div className="flex justify-between">
-                    <span>انقطاعات:</span>
+                    <span>Disconnections:</span>
                     <span>{metrics.totalDisconnections}</span>
                   </div>
                   
                   <div className="flex justify-between">
-                    <span>إعادة اتصال:</span>
+                    <span>Reconnections:</span>
                     <span>{metrics.totalReconnections}</span>
                   </div>
                   
                   <div className="flex justify-between">
-                    <span>متوسط الاستجابة:</span>
+                    <span>Avg Response:</span>
                     <span>{Math.round(metrics.averageResponseTime)}ms</span>
                   </div>
                   
                   {metrics.lastDisconnection && (
                     <div className="flex justify-between">
-                      <span>آخر انقطاع:</span>
+                      <span>Last Disconnect:</span>
                       <span className="text-xs">
-                        {metrics.lastDisconnection.toLocaleTimeString('ar-SA')}
+                        {metrics.lastDisconnection.toLocaleTimeString('en-US')}
                       </span>
                     </div>
                   )}
@@ -161,7 +159,7 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
             {/* Connection Quality Indicator */}
             <div className="mt-4 pt-3 border-t border-gray-700/50">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-400">جودة الاتصال:</span>
+                <span className="text-sm text-gray-400">Connection Quality:</span>
                 <div className="flex items-center gap-1">
                   {[1, 2, 3, 4, 5].map((bar) => (
                     <div

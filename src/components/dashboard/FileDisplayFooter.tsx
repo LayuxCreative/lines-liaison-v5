@@ -12,7 +12,6 @@ import {
   Calendar,
   CheckCircle,
   Clock,
-  Star,
 } from "lucide-react";
 import { format } from "date-fns";
 

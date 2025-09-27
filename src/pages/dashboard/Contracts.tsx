@@ -6,8 +6,6 @@ import {
   Eye,
   DollarSign,
   CheckCircle,
-  Clock,
-  AlertTriangle,
   FileCheck,
   Search,
 } from "lucide-react";
@@ -42,21 +40,7 @@ const Contracts: React.FC = () => {
     terms: string[];
   }> = [];
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "active":
-        return CheckCircle;
-      case "completed":
-        return FileCheck;
-      case "draft":
-        return Clock;
-      case "terminated":
-        return AlertTriangle;
-      default:
-        return FileText;
-    }
-  };
-
+  // Remove unused getStatusIcon function
   const getStatusColor = (status: string) => {
     switch (status) {
       case "active":
@@ -284,8 +268,7 @@ const Contracts: React.FC = () => {
             className="grid grid-cols-1 lg:grid-cols-2 gap-6"
           >
             {filteredContracts.map((contract, index) => {
-              const StatusIcon = getStatusIcon(contract.status);
-
+              // Remove unused StatusIcon variable
               return (
                 <motion.div
                   key={contract.id}

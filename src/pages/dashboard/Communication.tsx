@@ -1,18 +1,12 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import {
-  MessageSquare,
   Send,
   Search,
-  Filter,
   MoreVertical,
   Phone,
   Video,
   Paperclip,
-  Smile,
-  Users,
-  Clock,
-  CheckCircle2,
   User,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";

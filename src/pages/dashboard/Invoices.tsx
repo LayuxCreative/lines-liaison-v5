@@ -4,14 +4,10 @@ import {
   Receipt,
   Download,
   Eye,
-  Calendar,
-  DollarSign,
   CheckCircle,
   Clock,
   AlertTriangle,
-  X,
   Search,
-  Filter,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useData } from "../../contexts/DataContext";

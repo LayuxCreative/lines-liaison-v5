@@ -1,6 +1,7 @@
+// @refresh reset
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useAuth } from "./AuthContext";
-import { supabase } from "../config/unifiedSupabase";
+import { nodeApiService } from "../services/nodeApiService";
 import { activityLogger } from "../utils/activityLogger";
 
 export interface Notification {
@@ -32,7 +33,7 @@ const NotificationContext = createContext<NotificationContextType | undefined>(
 );
 
 // Supabase data conversion functions
-const convertSupabaseNotification = (data: {
+interface ApiNotification {
   id: string;
   title: string;
   message: string;
@@ -42,7 +43,9 @@ const convertSupabaseNotification = (data: {
   user_id: string;
   project_id?: string;
   action_url?: string;
-}): Notification => ({
+}
+
+const convertSupabaseNotification = (data: ApiNotification): Notification => ({
   id: data.id,
   title: data.title,
   message: data.message,
@@ -54,15 +57,13 @@ const convertSupabaseNotification = (data: {
   actionUrl: data.action_url,
 });
 
-// Fix Fast Refresh compatibility - move export to top level
-export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+// Fix Fast Refresh compatibility - use function declaration
+function NotificationProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [, setLoading] = useState(true);
 
-  // Load notifications from Supabase
+  // Load notifications via Node.js API
   const loadNotifications = async () => {
     if (!user?.id) {
       setNotifications([]);
@@ -72,32 +73,14 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({
 
     try {
       setLoading(true);
-      
-      // Add timeout to prevent hanging
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Request timeout')), 10000)
-      );
-
-      const queryPromise = supabase
-        .from("notifications")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(50); // Limit to prevent large data loads
-
-      const result = await Promise.race([queryPromise, timeoutPromise]);
-      const { data, error } = result as { data: unknown; error: unknown };
-
-      if (error) {
-        throw error;
+      const response = await nodeApiService.getNotifications(user.id);
+      if (response.success && response.data) {
+        setNotifications((response.data as unknown as ApiNotification[]).map(convertSupabaseNotification));
+      } else {
+        setNotifications([]);
       }
-
-      const convertedNotifications =
-        Array.isArray(data) ? data.map(convertSupabaseNotification) : [];
-      setNotifications(convertedNotifications);
     } catch (error) {
-      console.error("Error loading notifications:", error);
-      // Set empty array on error to prevent UI issues
+      console.error('Error loading notifications:', error);
       setNotifications([]);
     } finally {
       setLoading(false);
@@ -130,10 +113,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({
         title: notificationData.title,
         type: notificationData.type,
         userId: notificationData.userId,
-        projectId: notificationData.projectId
+        projectId: notificationData.projectId,
       });
 
-      // Add notification locally first for immediate UI feedback
+      // Optimistic UI update
       const fallbackNotification: Notification = {
         id: `temp-${Date.now()}`,
         ...notificationData,
@@ -142,71 +125,59 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({
       };
       setNotifications((prev) => [fallbackNotification, ...prev]);
 
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Request timeout')), 5000)
-      );
+      const response = await nodeApiService.createNotification({
+        title: notificationData.title,
+        message: notificationData.message,
+        type: notificationData.type,
+        userId: notificationData.userId,
+        projectId: notificationData.projectId,
+        actionUrl: notificationData.actionUrl,
+      });
 
-      const insertPromise = supabase
-        .from("notifications")
-        .insert({
-          title: notificationData.title,
-          message: notificationData.message,
-          type: notificationData.type,
-          user_id: notificationData.userId,
-          project_id: notificationData.projectId,
-          action_url: notificationData.actionUrl,
-          read: false,
-        })
-        .select()
-        .single();
-
-      const result = await Promise.race([insertPromise, timeoutPromise]);
-      const { data, error } = result as { data: unknown; error: unknown };
-
-      if (error) {
-        throw error;
-      }
-
-      // Replace temp notification with real one
-      if (data) {
-        const newNotification = convertSupabaseNotification(data as any);
-        setNotifications((prev) => 
-          prev.map(n => n.id === fallbackNotification.id ? newNotification : n)
+      if (response.success && response.data) {
+        const newNotification = convertSupabaseNotification(response.data as unknown as ApiNotification);
+        setNotifications((prev) =>
+          prev.map((n) => (n.id === fallbackNotification.id ? newNotification : n)),
         );
-        
-        await activityLogger.log("notification_create", "success", "Notification created successfully", {
-          notificationId: newNotification.id,
-          title: notificationData.title,
-          userId: notificationData.userId
-        });
+
+        await activityLogger.log(
+          "notification_create",
+          "success",
+          "Notification created successfully",
+          {
+            notificationId: newNotification.id,
+            title: notificationData.title,
+            userId: notificationData.userId,
+          },
+        );
       }
     } catch (error) {
       console.error("Error adding notification:", error);
-      await activityLogger.log("notification_create", "error", "Failed to create notification", {
-        title: notificationData.title,
-        userId: notificationData.userId,
-        error: error instanceof Error ? error.message : "Unknown error"
-      });
-      // Keep the fallback notification if database fails
+      await activityLogger.log(
+        "notification_create",
+        "error",
+        "Failed to create notification",
+        {
+          title: notificationData.title,
+          userId: notificationData.userId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        },
+      );
     }
   };
 
   const markAsRead = async (notificationId: string) => {
     try {
-      const { error } = await supabase
-        .from("notifications")
-        .update({ read: true })
-        .eq("id", notificationId);
-
-      if (error) throw error;
-
-      setNotifications((prev) =>
-        prev.map((notification) =>
-          notification.id === notificationId
-            ? { ...notification, isRead: true }
-            : notification,
-        ),
-      );
+      const response = await nodeApiService.markNotificationAsRead(notificationId);
+      if (response.success) {
+        setNotifications((prev) =>
+          prev.map((notification) =>
+            notification.id === notificationId
+              ? { ...notification, isRead: true }
+              : notification,
+          ),
+        );
+      }
     } catch (error) {
       console.error("Error marking notification as read:", error);
     }
@@ -214,18 +185,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const markAllAsRead = async () => {
     if (!user) return;
-
     try {
-      const { error } = await supabase
-        .from("notifications")
-        .update({ read: true })
-        .or(`user_id.eq.${user.id},user_id.eq.all`);
-
-      if (error) throw error;
-
-      setNotifications((prev) =>
-        prev.map((notification) => ({ ...notification, isRead: true })),
-      );
+      const response = await nodeApiService.markAllNotificationsAsRead(user.id);
+      if (response.success) {
+        setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      }
     } catch (error) {
       console.error("Error marking all notifications as read:", error);
     }
@@ -233,16 +197,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const deleteNotification = async (notificationId: string) => {
     try {
-      const { error } = await supabase
-        .from("notifications")
-        .delete()
-        .eq("id", notificationId);
-
-      if (error) throw error;
-
-      setNotifications((prev) =>
-        prev.filter((notification) => notification.id !== notificationId),
-      );
+      const response = await nodeApiService.deleteNotification(notificationId);
+      if (response.success) {
+        setNotifications((prev) =>
+          prev.filter((notification) => notification.id !== notificationId),
+        );
+      }
     } catch (error) {
       console.error("Error deleting notification:", error);
     }
@@ -250,15 +210,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const clearAllNotifications = async () => {
     if (!user) return;
-
     try {
-      const { error } = await supabase
-        .from("notifications")
-        .delete()
-        .or(`user_id.eq.${user.id},user_id.eq.all`);
-
-      if (error) throw error;
-
+      const ids = notifications.map((n) => n.id);
+      await Promise.all(ids.map((id) => nodeApiService.deleteNotification(id)));
       setNotifications([]);
     } catch (error) {
       console.error("Error clearing notifications:", error);
@@ -280,9 +234,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({
       {children}
     </NotificationContext.Provider>
   );
-};
+}
 
-export const useNotifications = () => {
+function useNotifications() {
   const context = useContext(NotificationContext);
   if (context === undefined) {
     throw new Error(
@@ -290,8 +244,10 @@ export const useNotifications = () => {
     );
   }
   return context;
-};
+}
 
 NotificationProvider.displayName = 'NotificationProvider';
+
+export { NotificationProvider, useNotifications };
 
 export default NotificationProvider;

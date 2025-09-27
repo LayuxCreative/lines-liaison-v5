@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { supabaseService } from '../../services/supabaseService';
+import { nodeApiService } from '../../services/nodeApiService';
 import { useAuth } from '../../contexts/AuthContext';
 
 // Types
@@ -213,8 +213,12 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     const loadNotifications = async () => {
       dispatch({ type: 'SET_LOADING', payload: true });
       try {
-        const notifications = await supabaseService.getNotifications(user.id);
-         dispatch({ type: 'SET_NOTIFICATIONS', payload: notifications as unknown as Notification[] });
+        const response = await nodeApiService.getNotifications(user.id);
+        if (response.success && response.data) {
+          dispatch({ type: 'SET_NOTIFICATIONS', payload: response.data as unknown as Notification[] });
+        } else {
+          throw new Error(response.error || 'Failed to load notifications');
+        }
       } catch (loadError) {
         console.error('Failed to load notifications:', loadError);
         dispatch({ type: 'SET_ERROR', payload: 'Failed to load notifications' });
@@ -234,7 +238,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     const setupSubscription = async () => {
       try {
-        subscription = await supabaseService.subscribeToNotifications(
+        subscription = await nodeApiService.subscribeToNotifications(
           user.id,
           (payload: any) => {
             if (payload.eventType === 'INSERT') {

@@ -6,14 +6,11 @@ import {
   File,
   CheckCircle,
   AlertCircle,
-  Loader2,
-  FolderOpen,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useData } from "../../contexts/DataContext";
 import { useNotifications } from "../../contexts/NotificationContext";
 import { activityLogger } from "../../utils/activityLogger";
-import FileDisplayFooter from "./FileDisplayFooter";
 
 interface FileUploadModalProps {
   isOpen: boolean;

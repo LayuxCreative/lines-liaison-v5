@@ -1,8 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState } from "react";
 import { Activity } from "../types";
-import { supabase } from "../config/unifiedSupabase";
-import supabaseService from "../services/supabaseService";
-import { useAuth } from "./AuthContext";
 
 interface ActivityContextType {
   activities: Activity[];
@@ -13,116 +10,44 @@ interface ActivityContextType {
 
 const ActivityContext = createContext<ActivityContextType | undefined>(undefined);
 
-export const ActivityProvider: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+function ActivityProvider({ children }: { children: React.ReactNode }) {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const { user } = useAuth();
 
-  // Load activities from Supabase with enhanced error handling
   const loadActivities = async () => {
-    if (!user) {
+    // Placeholder - will be implemented via Node.js API
+    // Return empty array without causing infinite loop
+    if (activities.length === 0) {
       setActivities([]);
-      return;
     }
-
-    try {
-      setIsLoading(true);
-      
-      // Use supabaseService for better error handling
-      const data = await supabaseService.getActivities();
-
-      if (data && data.length > 0) {
-        const convertedActivities: Activity[] = data.map((item: unknown) => {
-          const activityItem = item as Record<string, unknown>;
-          return {
-            id: String(activityItem.id || ''),
-            projectId: String(activityItem.project_id || activityItem.projectId || ''),
-            userId: String(activityItem.user_id || activityItem.userId || ''),
-            action: String(activityItem.action || ''),
-            description: String(activityItem.description || ''),
-            timestamp: new Date(activityItem.timestamp as string),
-            metadata: (activityItem.metadata as Record<string, string | number | boolean>) || {},
-          };
-        });
-        setActivities(convertedActivities);
-      } else {
-        setActivities([]);
-      }
-    } catch (error) {
-      console.error('Error loading activities:', error);
-      // Don't throw error, just set empty array for better UX
-      setActivities([]);
-    } finally {
-      setIsLoading(false);
-    }
+    return [];
   };
 
-  // Load activities immediately when user is available
-  useEffect(() => {
-    let isMounted = true;
-    
-    // Only load activities if user is logged in
-    if (user) {
-      loadActivities().then(() => {
-        if (!isMounted) {
-          console.log('Component unmounted, skipping activity update');
-        }
-      });
-    } else {
-      setActivities([]);
-    }
-    
-    return () => {
-      isMounted = false;
-    };
-  }, [user]);
-
   const addActivity = async (activity: Omit<Activity, "id" | "timestamp">) => {
-    const newActivity: Activity = {
-      ...activity,
-      id: Date.now().toString(),
-      timestamp: new Date(),
-    };
-    
-    // Save to Supabase first
-    try {
-      const { error } = await supabase
-        .from("activities")
-        .insert({
-          id: newActivity.id,
-          project_id: newActivity.projectId,
-          user_id: newActivity.userId,
-          action: newActivity.action,
-          description: newActivity.description,
-          timestamp: newActivity.timestamp.toISOString(),
-          metadata: newActivity.metadata || {},
-        });
-      
-      if (error) {
-        console.error("Error saving activity to Supabase:", error);
-        return;
-      }
-      
-      // Only add to local state if Supabase save was successful
-      setActivities((prev) => [newActivity, ...prev]);
-    } catch (error) {
-      console.error("Error saving activity:", error);
-    }
+    // Placeholder - will be implemented via Node.js API
+    console.log('Activity added:', activity);
+  };
+
+  const value: ActivityContextType = {
+    activities,
+    addActivity,
+    loadActivities,
+    isLoading,
   };
 
   return (
-    <ActivityContext.Provider value={{ activities, addActivity, loadActivities, isLoading }}>
+    <ActivityContext.Provider value={value}>
       {children}
     </ActivityContext.Provider>
   );
-};
+}
 
-export const useActivity = () => {
+function useActivity() {
   const context = useContext(ActivityContext);
   if (context === undefined) {
     throw new Error("useActivity must be used within an ActivityProvider");
   }
   return context;
-};
+}
+
+export { ActivityProvider, useActivity };

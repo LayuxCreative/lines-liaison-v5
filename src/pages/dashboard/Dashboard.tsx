@@ -5,36 +5,31 @@ import {
   BarChart3,
   FolderOpen,
   Clock,
-  TrendingUp,
   AlertCircle,
   CheckCircle,
-  Calendar,
   FileText,
   MessageSquare,
   Building2,
   LogIn,
   LogOut,
+  TrendingUp,
+  Calendar,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useData } from "../../contexts/DataContext";
 import { useActivity } from "../../contexts/ActivityContext";
 import { formatDistanceToNow } from "date-fns";
-import supabaseService from "../../services/supabaseService";
+import { nodeApiService } from "../../services/nodeApiService";
 import { Project } from "../../types";
+import LocalFileUpload from "../../components/common/LocalFileUpload";
 
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const { getProjectsByUser } = useData();
-  const { activities, loadActivities } = useActivity();
+  const { activities } = useActivity();
   const [userNames, setUserNames] = useState<Record<string, string>>({});
 
-  // Reload activities when user changes (login/logout)
-  useEffect(() => {
-    if (user) {
-      loadActivities();
-    }
-  }, [user, loadActivities]);
 
   // Load user names for activities
   useEffect(() => {
@@ -47,8 +42,8 @@ const Dashboard: React.FC = () => {
           names[userId] = user.name || 'Current User';
         } else {
           try {
-            const userData = await supabaseService.getUserById(userId);
-            names[userId] = userData?.name || 'Unknown User';
+            const response = await nodeApiService.getUserById(userId);
+            names[userId] = response.data?.name || 'Unknown User';
           } catch (error) {
             console.error('Error loading user:', error);
             names[userId] = 'Unknown User';
@@ -125,7 +120,7 @@ const Dashboard: React.FC = () => {
 
 
   // Get recent activities from DataContext
-  const recentActivities = activities.slice(0, 5).map(activity => ({
+  const recentActivities = (activities && Array.isArray(activities) ? activities : []).slice(0, 5).map(activity => ({
     id: activity.id,
     type: activity.action,
     description: activity.description,
@@ -357,11 +352,31 @@ const Dashboard: React.FC = () => {
 
 
 
-        {/* Quick Actions */}
+        {/* Local File Storage */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.7, duration: 0.6 }}
+          className="mt-8 bg-white rounded-xl shadow-lg p-6"
+        >
+          <h2 className="text-xl font-semibold text-gray-900 mb-6">
+            Local File Storage
+          </h2>
+          <LocalFileUpload 
+            projectId={userProjects[0]?.id}
+            onFileUploaded={(file) => {
+              console.log('File uploaded locally:', file);
+            }}
+            maxFiles={5}
+            className="max-w-4xl"
+          />
+        </motion.div>
+
+        {/* Quick Actions */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.8, duration: 0.6 }}
           className="mt-8 bg-white rounded-xl shadow-lg p-6"
         >
           <h2 className="text-xl font-semibold text-gray-900 mb-6">

@@ -7,9 +7,22 @@ import {
   Shield
 } from "lucide-react";
 
-import { useNotifications } from "../../contexts/NotificationContext";
-import { supabaseService } from "../../services/supabaseService";
-import { User as UserType, PermissionGroup } from "../../types";
+
+// Types for settings
+type ProfileVisibility = "public" | "contacts" | "private";
+interface NotificationsSettings { email: boolean; push: boolean; sms: boolean }
+interface PrivacySettings { profileVisibility: ProfileVisibility; showEmail: boolean; showPhone: boolean; allowMessages: boolean }
+interface SettingsModel {
+  theme: string;
+  language: string;
+  timezone: string;
+  notifications: NotificationsSettings;
+  privacy: PrivacySettings;
+  twoFactorAuth: boolean;
+  sessionTimeout: string;
+  loginNotifications: boolean;
+}
+
 import UserManagement from "../../components/dashboard/UserManagement";
 import GeneralSettings from "../../components/dashboard/GeneralSettings";
 import SecuritySettings from "../../components/dashboard/SecuritySettings";
@@ -23,12 +36,12 @@ const Settings: React.FC = () => {
   });
 
   // Settings state
-  const [settings, setSettings] = useState(() => {
+  const [settings, setSettings] = useState<SettingsModel>(() => {
     // Load settings from localStorage or use defaults
     const savedSettings = localStorage.getItem("userSettings");
     if (savedSettings) {
       try {
-        return JSON.parse(savedSettings);
+        return JSON.parse(savedSettings) as SettingsModel;
       } catch (error) {
         console.error("Error parsing saved settings:", error);
       }
@@ -52,24 +65,12 @@ const Settings: React.FC = () => {
         allowMessages: true,
       },
       // Security Settings
-      twoFactorEnabled: false,
-      sessionTimeout: 30,
+      twoFactorAuth: false,
+      sessionTimeout: "30m",
       loginNotifications: true,
     };
   });
 
-  // Users state for user management
-  const [users, setUsers] = useState<UserType[]>([]);
-  const [permissionGroups, setPermissionGroups] = useState<PermissionGroup[]>([]);
-  const { addNotification } = useNotifications();
-
-  // Load data on component mount
-  useEffect(() => {
-    if (activeTab === "users" || activeTab === "permissions") {
-      loadUsers();
-      loadPermissionGroups();
-    }
-  }, [activeTab]);
 
   // Update URL when tab changes
   useEffect(() => {
@@ -77,64 +78,34 @@ const Settings: React.FC = () => {
     localStorage.setItem("settings-active-tab", activeTab);
   }, [activeTab, setSearchParams]);
 
-  const loadUsers = async () => {
-    try {
-      const usersData = await supabaseService.getUsers();
-      setUsers(usersData);
-    } catch (error) {
-      console.error("Error loading users:", error);
-      addNotification({
-        type: "error",
-        title: "Error",
-        message: "Failed to load users",
-        userId: "system",
-        priority: "high"
-      });
-    }
-  };
-
-  const loadPermissionGroups = async () => {
-    try {
-      const groupsData = await supabaseService.getPermissionGroups();
-      setPermissionGroups(groupsData);
-    } catch (error) {
-      console.error("Error loading permission groups:", error);
-      addNotification({
-        type: "error",
-        title: "Error",
-        message: "Failed to load permission groups",
-        userId: "system",
-        priority: "high"
-      });
-    }
-  };
-
-  const handleSettingChange = (key: string, value: string | boolean) => {
-    const newSettings = { ...settings };
-    
-    // Handle nested settings
-    if (key.includes('.')) {
-      const keys = key.split('.');
-      let current = newSettings;
-      for (let i = 0; i < keys.length - 1; i++) {
-        if (!current[keys[i]]) {
-          current[keys[i]] = {};
+  // Remove unused states/loaders
+  const handleSettingChange = (key: string, value: string | boolean | number) => {
+    setSettings((prev) => {
+      const next: SettingsModel = { ...prev };
+  
+      if (key.includes(".")) {
+        const [group, field] = key.split(".") as ["privacy" | "notifications", string];
+        if (group === "privacy") {
+          next.privacy = {
+            ...prev.privacy,
+            [field]: value as PrivacySettings[keyof PrivacySettings],
+          } as PrivacySettings;
+        } else if (group === "notifications") {
+          next.notifications = {
+            ...prev.notifications,
+            [field]: value as NotificationsSettings[keyof NotificationsSettings],
+          } as NotificationsSettings;
         }
-        current = current[keys[i]];
+      } else if (key in next) {
+        (next as unknown as Record<string, unknown>)[key] = value as SettingsModel[keyof SettingsModel];
       }
-      current[keys[keys.length - 1]] = value;
-    } else {
-      newSettings[key] = value;
-    }
-    
-    setSettings(newSettings);
-    
-    // Save to localStorage
-    localStorage.setItem('userSettings', JSON.stringify(newSettings));
+  
+      localStorage.setItem("userSettings", JSON.stringify(next));
+      return next;
+    });
   };
 
-
-
+  // Correct effects
   const tabs = [
     {
       id: "general",
@@ -197,21 +168,14 @@ const Settings: React.FC = () => {
           <SecuritySettings 
             settings={settings}
             onSettingChange={handleSettingChange}
-            onPasswordChange={async () => {
-              console.log('Password change requested');
+            onPasswordChange={async (currentPassword: string, newPassword: string) => {
+              console.log('Password change requested', { currentPassword, newPassword });
             }}
           />
         );
       case "users":
         return (
-          <UserManagement 
-            users={users}
-            setUsers={setUsers}
-            permissionGroups={permissionGroups}
-            isLoadingUsers={false}
-            setIsLoadingUsers={() => {}}
-            showConfirmation={() => {}}
-          />
+          <UserManagement />
         );
       default:
         return (

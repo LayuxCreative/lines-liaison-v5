@@ -6,12 +6,10 @@ import {
   ArrowRight,
   Building2,
   Users,
-  Award,
   Globe,
   Zap,
   Shield,
   CheckCircle,
-  Star,
   Play,
 } from "lucide-react";
 

@@ -45,7 +45,7 @@ export interface TypingIndicator {
 class SocketService {
   private socket: Socket | null = null;
   private currentUser: User | null = null;
-  private eventHandlers: Map<string, Function[]> = new Map();
+  private eventHandlers: Map<string, ((...args: unknown[]) => void)[]> = new Map();
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
@@ -78,9 +78,7 @@ class SocketService {
           reconnection: true,
           reconnectionAttempts: 5,
           reconnectionDelay: 1000,
-          reconnectionDelayMax: 5000,
-          pingTimeout: 60000,
-          pingInterval: 25000
+          reconnectionDelayMax: 5000
         });
 
         // Set up connection timeout
@@ -200,14 +198,14 @@ class SocketService {
   }
 
   // Event handling
-  on(event: string, handler: Function): void {
+  on(event: string, handler: (...args: unknown[]) => void): void {
     if (!this.eventHandlers.has(event)) {
       this.eventHandlers.set(event, []);
     }
     this.eventHandlers.get(event)!.push(handler);
   }
 
-  off(event: string, handler: Function): void {
+  off(event: string, handler: (...args: unknown[]) => void): void {
     const handlers = this.eventHandlers.get(event);
     if (handlers) {
       const index = handlers.indexOf(handler);
@@ -217,7 +215,7 @@ class SocketService {
     }
   }
 
-  private emit(event: string, ...args: any[]): void {
+  private emit(event: string, ...args: unknown[]): void {
     const handlers = this.eventHandlers.get(event);
     if (handlers) {
       handlers.forEach(handler => handler(...args));
@@ -297,7 +295,7 @@ class SocketService {
     });
 
     // WebRTC signaling events
-    this.socket.on('webrtc:signal', (data: { from: string; to: string; signal: any }) => {
+    this.socket.on('webrtc:signal', (data: { from: string; to: string; signal: unknown }) => {
       this.emit('webrtcSignal', data);
     });
   }
@@ -458,7 +456,7 @@ class SocketService {
   }
 
   // WebRTC signaling
-  sendSignal(to: string, signal: any): void {
+  sendSignal(to: string, signal: unknown): void {
     if (!this.socket || !this.currentUser) {
       throw new Error('Not connected to chat server');
     }

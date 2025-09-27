@@ -1,33 +1,24 @@
-import React, { useState, useMemo, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useState, useMemo } from "react";
+import { motion } from "framer-motion";
 import {
   Search,
-  Filter,
   Grid3X3,
   List,
   Eye,
   FileText,
-  Image,
-  Film,
-  Archive,
-  File,
   CheckCircle,
   Clock,
   MoreVertical,
-  User,
-  Calendar,
-  FolderOpen,
-  Star,
-  AlertCircle,
-  Edit3,
-  Share2,
-  Trash2,
-  ExternalLink,
-  Activity,
-  Users,
-  Building2,
-  X,
   Upload,
+  Star,
+  Edit3,
+  AlertCircle,
+  Share2,
+  File,
+  Image,
+  Film,
+  Archive,
+  Building2,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useData } from "../../contexts/DataContext";
@@ -35,10 +26,11 @@ import { ProjectFile } from "../../types";
 import FileViewer from "../../components/dashboard/FileViewer";
 // Removed simpleFileUploadService - using Supabase Storage instead
 import SimpleToast, { useToast } from "../../components/common/SimpleToast";
-import { format, formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
+// import { nodeApiService } from "../../services/nodeApiService";
 import { FileUploadModal } from "../../components/dashboard/FileUploadModal";
 import FileDisplayFooter from "../../components/dashboard/FileDisplayFooter";
-import { activityLogger } from "../../utils/activityLogger";
+
 
 interface ExtendedProjectFile extends ProjectFile {
   projectId: string;
@@ -52,9 +44,26 @@ interface ExtendedProjectFile extends ProjectFile {
   tags: string[];
 }
 
+// Footer file data used by FileDisplayFooter
+interface FooterFileData {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  uploadedBy: string;
+  uploadedAt: Date;
+  projectName: string;
+  category: string;
+  viewCount: number;
+  isApproved: boolean;
+  version: number;
+  lastViewedBy?: string;
+  lastViewedAt?: Date;
+}
+
 const Files: React.FC = () => {
   const { user } = useAuth();
-  const { getProjectsByUser, addProjectFile, projects } = useData();
+  const { getProjectsByUser } = useData();
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -65,123 +74,23 @@ const Files: React.FC = () => {
   );
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-  const [footerFile, setFooterFile] = useState<any>(null);
+  // Remove legacy file input upload states
+  // const [isUploading, setIsUploading] = useState(false);
+  // const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [footerFile, setFooterFile] = useState<FooterFileData | null>(null);
   const [isFooterVisible, setIsFooterVisible] = useState(false);
   const [sortBy, setSortBy] = useState("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const { messages, removeToast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isUploading, setIsUploading] = useState(false);
+  const handleUploadClick = () => { setIsUploadModalOpen(true); };
+  // legacy upload flow removed in favor of FileUploadModal
 
-  const handleFileDeleteManager = (fileId: string) => {
-    try {
-      activityLogger.log("file_delete", "info", "Starting file deletion", {
-        fileId,
-        userId: user?.id
-      });
 
-      // Remove from local state - actual deletion would need server endpoint
-      console.log("Deleting file:", fileId);
-      // Refresh files list here if needed
-
-      activityLogger.log("file_delete", "success", "File deleted successfully", {
-        fileId,
-        userId: user?.id
-      });
-    } catch (error) {
-      console.error("File deletion failed:", error);
-      
-      activityLogger.log("file_delete", "error", "File deletion failed", {
-        fileId,
-        userId: user?.id,
-        error: error instanceof Error ? error.message : "Unknown error"
-      });
-
-      alert("File deletion failed. Please try again.");
-    }
-  };
-
-  const handleFileUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-
-    setIsUploading(true);
-    try {
-      for (const file of Array.from(files)) {
-        await activityLogger.log("file_upload", "info", "Starting file upload", {
-          fileName: file.name,
-          fileSize: file.size,
-          fileType: file.type,
-          projectId: selectedProject,
-          userId: user?.id
-        });
-
-        // Using Supabase Storage instead of simpleFileUploadService
-        const fileUrl = URL.createObjectURL(file);
-        if (fileUrl) {
-          // Add file to project
-          const newFile: ProjectFile = {
-            id: Date.now().toString(),
-            projectId: selectedProject,
-            name: file.name,
-            type: file.type || "application/octet-stream",
-            size: file.size,
-            url: fileUrl,
-            uploadedAt: new Date(),
-            uploadedBy: user?.name || "Unknown",
-            lastModified: new Date(),
-            lastModifiedBy: user?.name || "Unknown",
-            category: "document",
-            isApproved: false,
-            version: 1,
-            description: "",
-            tags: [],
-            activity: [],
-            versions: [],
-            viewCount: 0,
-            downloadCount: 0,
-          };
-          addProjectFile(selectedProject, newFile);
-
-          await activityLogger.log("file_upload", "success", "File uploaded successfully", {
-            fileName: file.name,
-            fileSize: file.size,
-            projectId: selectedProject,
-            userId: user?.id
-          });
-        }
-      }
-      // Reset input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    } catch (error) {
-      console.error("File upload failed:", error);
-      
-      await activityLogger.log("file_upload", "error", "File upload failed", {
-        projectId: selectedProject,
-        userId: user?.id,
-        error: error instanceof Error ? error.message : "Unknown error"
-      });
-
-      alert("File upload failed. Please try again.");
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const handleUploadClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  if (!user) return null;
-
-  const userProjects = useMemo(
-    () => getProjectsByUser(user.id, user.role),
-    [user.id, user.role, projects],
-  );
+  // Keep hooks order stable; do not early-return
+  const userProjects = useMemo(() => {
+    if (!user) return [] as ReturnType<typeof getProjectsByUser>;
+    return getProjectsByUser(user.id, user.role);
+  }, [user, getProjectsByUser]);
 
   // Extended files data with real tracking information
   const extendedFiles: ExtendedProjectFile[] = useMemo(() => {
@@ -314,12 +223,8 @@ const Files: React.FC = () => {
     setIsViewerOpen(true);
   };
 
-  const handleFileHistory = (file: ExtendedProjectFile) => {
-    // File history functionality removed
-  };
-
   const handleStarToggle = (fileId: string) => {
-    // TODO: Implement star toggle functionality
+    console.debug("Star toggle clicked for file:", fileId);
     alert("Star toggle functionality will be implemented");
   };
 
@@ -369,21 +274,13 @@ const Files: React.FC = () => {
               </p>
             </div>
             <div className="mt-4 sm:mt-0">
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                onChange={handleFileUpload}
-                className="hidden"
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.dwg,.rvt,.jpg,.jpeg,.png,.gif,.zip,.rar"
-              />
+              {/* Removed legacy hidden file input */}
               <button
-                onClick={() => setIsUploadModalOpen(true)}
-                disabled={isUploading}
-                className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-teal-600 text-white rounded-lg font-medium hover:from-blue-700 hover:to-teal-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleUploadClick}
+                className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-teal-600 text-white rounded-lg font-medium hover:from-blue-700 hover:to-teal-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
               >
                 <Upload className="w-5 h-5 mr-2" />
-                {isUploading ? "Uploading..." : "Upload Files"}
+                Upload Files
               </button>
             </div>
           </div>
@@ -892,7 +789,7 @@ const Files: React.FC = () => {
               statusFilter !== "all" ||
               selectedProject !== "all"
                 ? "Try adjusting your search or filter criteria."
-                : user.role === "client"
+                : user?.role === "client"
                   ? "Your project files will appear here once added by the team."
                   : "Your files will appear here once added."}
             </p>
@@ -914,7 +811,7 @@ const Files: React.FC = () => {
       <FileUploadModal
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
-        onFileUploaded={(fileData: any) => {
+        onFileUploaded={(fileData: FooterFileData) => {
           setFooterFile(fileData);
           setIsFooterVisible(true);
           setIsUploadModalOpen(false);

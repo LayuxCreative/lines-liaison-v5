@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense, lazy } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -7,36 +7,39 @@ import {
   useLocation,
 } from "react-router-dom";
 import { useAuth } from "./contexts/AuthContext";
-import { useRealtimeSubscription } from "./hooks/useRealtimeSubscription";
+// Realtime subscription removed - using Node.js API only
 import Header from "./components/common/Header";
 import DashboardHeader from "./components/dashboard/DashboardHeader";
 import Footer from "./components/common/Footer";
 import LoadingSpinner from "./components/common/LoadingSpinner";
 import ScrollToTop from "./components/common/ScrollToTop";
 import ErrorBoundary from "./components/common/ErrorBoundary";
+import GlobalErrorBoundary from "./components/common/GlobalErrorBoundary";
 
-// Public pages
+// Public pages - keep critical ones non-lazy for better initial load
 import Home from "./pages/Home";
-import Services from "./pages/Services";
-import About from "./pages/About";
-import Contact from "./pages/Contact";
 import Login from "./pages/Login";
 import Logout from "./pages/Logout";
 
-// Dashboard pages
-import Dashboard from "./pages/dashboard/Dashboard";
-import Projects from "./pages/dashboard/Projects";
-import CreateProject from "./pages/dashboard/CreateProject";
-import ProjectDetails from "./pages/dashboard/ProjectDetails";
-import Files from "./pages/dashboard/Files";
-import Communication from "./pages/dashboard/Communication";
-import Reports from "./pages/dashboard/Reports";
-import Invoices from "./pages/dashboard/Invoices";
-import Contracts from "./pages/dashboard/Contracts";
-import Tasks from "./pages/dashboard/Tasks";
-import Profile from "./pages/dashboard/Profile";
-import Settings from "./pages/dashboard/Settings";
-import CommunicationHub from "./components/communication/CommunicationHub";
+// Lazy load non-critical pages for better performance
+const Services = lazy(() => import("./pages/Services"));
+const About = lazy(() => import("./pages/About"));
+const Contact = lazy(() => import("./pages/Contact"));
+
+// Lazy load dashboard pages (heavy components)
+const Dashboard = lazy(() => import("./pages/dashboard/Dashboard"));
+const Projects = lazy(() => import("./pages/dashboard/Projects"));
+const CreateProject = lazy(() => import("./pages/dashboard/CreateProject"));
+const ProjectDetails = lazy(() => import("./pages/dashboard/ProjectDetails"));
+const Files = lazy(() => import("./pages/dashboard/Files"));
+const Communication = lazy(() => import("./pages/dashboard/Communication"));
+const Reports = lazy(() => import("./pages/dashboard/Reports"));
+const Invoices = lazy(() => import("./pages/dashboard/Invoices"));
+const Contracts = lazy(() => import("./pages/dashboard/Contracts"));
+const Tasks = lazy(() => import("./pages/dashboard/Tasks"));
+const Profile = lazy(() => import("./pages/dashboard/Profile"));
+const Settings = lazy(() => import("./pages/dashboard/Settings"));
+const CommunicationHub = lazy(() => import("./components/communication/CommunicationHub"));
 
 const AppContent: React.FC = () => {
   const { user } = useAuth();
@@ -44,7 +47,7 @@ const AppContent: React.FC = () => {
   const isDashboard = location.pathname.startsWith("/dashboard");
 
   // Enable realtime subscriptions when user is logged in
-  useRealtimeSubscription();
+  // Realtime subscription disabled
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -145,12 +148,16 @@ const AppContent: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <ErrorBoundary>
-      <Router>
-        <ScrollToTop />
-        <AppContent />
-      </Router>
-    </ErrorBoundary>
+    <GlobalErrorBoundary>
+      <ErrorBoundary>
+        <Router>
+          <ScrollToTop />
+          <Suspense fallback={<LoadingSpinner />}>
+            <AppContent />
+          </Suspense>
+        </Router>
+      </ErrorBoundary>
+    </GlobalErrorBoundary>
   );
 };
 

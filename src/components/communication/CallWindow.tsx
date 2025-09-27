@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Phone,
   PhoneOff,
@@ -59,7 +59,7 @@ const CallWindow: React.FC<CallWindowProps> = ({
     return () => {
       stopCall();
     };
-  }, [isActive]);
+  }, [isActive, startCall, stopCall]);
 
   useEffect(() => {
     if (isActive) {
@@ -85,7 +85,7 @@ const CallWindow: React.FC<CallWindowProps> = ({
     }
   }, [isActive]);
 
-  const startCall = async () => {
+  const startCall = useCallback(async () => {
     try {
       const constraints = {
         audio: true,
@@ -102,9 +102,9 @@ const CallWindow: React.FC<CallWindowProps> = ({
     } catch {
       // Error starting call
     }
-  };
+  }, [callType, currentUser.id, currentUser.name]);
 
-  const stopCall = () => {
+  const stopCall = useCallback(() => {
     if (localStream) {
       localStream.getTracks().forEach((track) => {
         track.stop();
@@ -117,7 +117,7 @@ const CallWindow: React.FC<CallWindowProps> = ({
     }
 
 
-  };
+  }, [localStream, currentUser.id, currentUser.name]);
 
   const toggleAudio = () => {
     if (localStream) {

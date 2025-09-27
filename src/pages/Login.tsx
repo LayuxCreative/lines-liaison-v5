@@ -14,12 +14,12 @@ import {
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import LoadingSpinner from "../components/common/LoadingSpinner";
-import { SupabaseConnectionTest } from "../utils/connectionTest";
+
 
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState("admin@linesliaison.com");
-  const [password, setPassword] = useState("admin123");
+  const [password, setPassword] = useState("0MGXX!:n4x=|):(U");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -46,7 +46,7 @@ const Login: React.FC = () => {
     }
   }, [user, isLoading, navigate, from]);
 
-  // Test Supabase connection on component mount
+  // Test Node.js API connection on component mount
   useEffect(() => {
     const testConnection = async () => {
       setConnectionStatus({
@@ -56,26 +56,27 @@ const Login: React.FC = () => {
       });
 
       try {
-        // Increased timeout for better reliability
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Connection timeout')), 30000)
-        );
-
-        const connectionPromise = SupabaseConnectionTest.testConnection();
+        // Test Node.js API health endpoint
+        const response = await fetch('http://localhost:3001/api/health');
         
-        const result = await Promise.race([connectionPromise, timeoutPromise]) as { success: boolean; message: string; latency?: number };
-        
-        setConnectionStatus({
-          isConnected: result.success,
-          message: result.success ? "Connected successfully" : result.message,
-          isChecking: false
-        });
+        if (response.ok) {
+          setConnectionStatus({
+            isConnected: true,
+            message: "Connected successfully",
+            isChecking: false
+          });
+        } else {
+          setConnectionStatus({
+            isConnected: false,
+            message: "API server not responding",
+            isChecking: false
+          });
+        }
       } catch (error) {
         console.error('Connection test failed:', error);
-        // Allow login attempt even if connection test fails
         setConnectionStatus({
-          isConnected: true, // Changed to true to allow login attempts
-          message: "Connection test timeout - proceeding with login",
+          isConnected: false,
+          message: "API server not available. Please ensure the backend server is running.",
           isChecking: false
         });
       }

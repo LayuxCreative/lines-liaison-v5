@@ -6,14 +6,14 @@ import {
   Search, 
   Filter, 
   Shield,
-  X,
   User as UserIcon,
   Edit,
   Building2,
-  Camera
+  Camera,
+  X
 } from 'lucide-react';
 import { User, PermissionGroup } from '../../types';
-import { supabaseService } from '../../services/supabaseService';
+import { nodeApiService } from '../../services/nodeApiService';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotifications } from '../../contexts/NotificationContext';
 import PermissionGroups from './PermissionGroups';
@@ -39,7 +39,7 @@ interface NewUser {
 }
 
 const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
-  const { user, updateUserProfile, refreshUserProfile } = useAuth();
+  const { user, refreshUserProfile } = useAuth();
   const { addNotification } = useNotifications();
   
   // State management
@@ -78,13 +78,13 @@ const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [usersData, groupsData] = await Promise.all([
-        supabaseService.getUsers(),
-        supabaseService.getPermissionGroups()
+      const [usersResponse, groupsResponse] = await Promise.all([
+        nodeApiService.getUsers(),
+        nodeApiService.getPermissionGroups()
       ]);
       
-      setUsers(usersData);
-      setPermissionGroups(groupsData);
+      setUsers(usersResponse.data || []);
+      setPermissionGroups(groupsResponse.data || []);
     } catch (error) {
       console.error('Error loading data:', error);
       addNotification({
@@ -100,6 +100,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
 
   // Filter and sort users
   const getFilteredAndSortedUsers = () => {
+    if (!users || !Array.isArray(users)) return [];
+    
     const filtered = users.filter(user => {
       const matchesSearch = user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            user.email?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -139,32 +141,30 @@ const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
   // User CRUD operations
   const handleCreateUser = async () => {
     try {
-      await activityLogger.log("user_create", "info", "Creating new user", {
-        userRole: newUser.role,
-        userName: newUser.full_name
-      });
-      
       const userData = {
         ...newUser,
         status: 'available' as const
       };
       
-      const createdUser = await supabaseService.createUser(userData);
-      setUsers([...users, createdUser]);
-      setShowCreateUser(false);
-      resetForm();
-      
-      await activityLogger.log("user_create", "success", "User created successfully", {
-        createdUserId: createdUser.id,
-        userRole: createdUser.role
-      });
-      
-      addNotification({
-        type: 'success',
-        title: 'User Created',
-        message: `User ${newUser.full_name} created successfully`,
-        userId: user?.id || ''
-      });
+      const response = await nodeApiService.createUser(userData);
+      const createdUser = response.data;
+      if (createdUser) {
+        setUsers([...users, createdUser]);
+        setShowCreateUser(false);
+        resetForm();
+        
+        await activityLogger.log("user_create", "success", "User created successfully", {
+          createdUserId: createdUser.id,
+          userRole: createdUser.role
+        });
+        
+        addNotification({
+          type: 'success',
+          title: 'User Created',
+          message: `User ${newUser.full_name} created successfully`,
+          userId: user?.id || ''
+        });
+      }
     } catch (error) {
       console.error('Error creating user:', error);
       
@@ -193,57 +193,67 @@ const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
         updatedFields: Object.keys(updates)
       });
       
-      console.log('Calling supabaseService.updateUser...');
-      const updatedUser = await supabaseService.updateUser(userId, updates);
-      console.log('Update successful, result:', updatedUser);
-      setUsers(users.map(u => u.id === userId ? updatedUser : u));
-      setEditingUser(null);
-      setShowCreateUser(false);
-      resetForm();
-      
-      // Refresh current user profile if updating own profile
-      if (userId === user?.id) {
-        await refreshUserProfile();
+      console.log('Calling nodeApiService.updateUser...');
+      const response = await nodeApiService.updateUser(userId, updates);
+      const updatedUser = response.data;
+      if (updatedUser) {
+        console.log('Update successful, result:', updatedUser);
+        setUsers(users.map(u => u.id === userId ? updatedUser : u));
+        setEditingUser(null);
+        setShowCreateUser(false);
+        resetForm();
+        
+        // Refresh current user profile if updating own profile
+        if (userId === user?.id) {
+          await refreshUserProfile();
+        }
+        
+        // Determine what was actually updated by comparing with original values
+        const updatedFields = [];
+        if (originalUser) {
+          if (updates.full_name && updates.full_name !== originalUser.full_name) {
+            updatedFields.push('name');
+          }
+          if (updates.email && updates.email !== originalUser.email) {
+            updatedFields.push('email');
+          }
+          if (updates.avatar_url && updates.avatar_url !== originalUser.avatar_url) {
+            updatedFields.push('profile picture');
+          }
+          if (updates.role && updates.role !== originalUser.role) {
+            updatedFields.push('role');
+          }
+          if (updates.company && updates.company !== originalUser.company) {
+            updatedFields.push('company');
+          }
+          if (updates.department && updates.department !== originalUser.department) {
+            updatedFields.push('department');
+          }
+          if (updates.position && updates.position !== originalUser.position) {
+            updatedFields.push('position');
+          }
+          if (updates.phone && updates.phone !== originalUser.phone) {
+            updatedFields.push('phone');
+          }
+        }
+        
+        await activityLogger.log("user_update", "success", "User updated successfully", {
+          userId,
+          updatedFields: updatedFields,
+          userName: updatedUser.full_name || updatedUser.email
+        });
+        
+        const updatedFieldsText = updatedFields.length > 0 
+          ? updatedFields.join(', ')
+          : 'profile data';
+        
+        addNotification({
+          type: 'success',
+          title: 'User Updated',
+          message: `Updated ${updatedFieldsText} for ${updatedUser.full_name || updatedUser.email}`,
+          userId: user?.id || ''
+        });
       }
-      
-      // Determine what was actually updated by comparing with original values
-      const updatedFields = [];
-      if (originalUser) {
-        if (updates.full_name && updates.full_name !== originalUser.full_name) {
-          updatedFields.push('name');
-        }
-        if (updates.email && updates.email !== originalUser.email) {
-          updatedFields.push('email');
-        }
-        if (updates.avatar_url && updates.avatar_url !== originalUser.avatar_url) {
-          updatedFields.push('profile picture');
-        }
-        if (updates.role && updates.role !== originalUser.role) {
-          updatedFields.push('role');
-        }
-        if (updates.company && updates.company !== originalUser.company) {
-          updatedFields.push('company');
-        }
-        if (updates.department && updates.department !== originalUser.department) {
-          updatedFields.push('department');
-        }
-        if (updates.position && updates.position !== originalUser.position) {
-          updatedFields.push('position');
-        }
-        if (updates.phone && updates.phone !== originalUser.phone) {
-          updatedFields.push('phone');
-        }
-      }
-      
-      const updatedFieldsText = updatedFields.length > 0 
-        ? updatedFields.join(', ')
-        : 'profile data';
-      
-      await activityLogger.log("user_update", "success", "User updated successfully", {
-        userId,
-        updatedFields: updatedFields,
-        userName: updatedUser.full_name || updatedUser.email
-      });
       
       addNotification({
         type: 'success',
@@ -271,27 +281,15 @@ const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
 
   const handleUpdateAvatar = async (userId: string, avatarUrl: string) => {
     try {
-      // Update user avatar in database
-      const success = await imageStorageService.updateUserAvatar(userId, avatarUrl);
+      // Update user avatar directly through API
+      await handleUpdateUser(userId, { avatar_url: avatarUrl });
       
-      if (success) {
-        // Update local state
-        setUsers(users.map(u => u.id === userId ? { ...u, avatar_url: avatarUrl } : u));
-        
-        // Update AuthContext if this is the current user
-        if (user && user.id === userId) {
-          await updateUserProfile({ avatar_url: avatarUrl });
-        }
-        
-        addNotification({
-          type: 'success',
-          title: 'Avatar Updated',
-          message: 'Profile picture updated successfully',
-          userId: user?.id || ''
-        });
-      } else {
-        throw new Error('Failed to update avatar in database');
-      }
+      addNotification({
+        type: 'success',
+        title: 'Avatar Updated',
+        message: 'Profile picture updated successfully',
+        userId: user?.id || ''
+      });
     } catch (error) {
       console.error('Error updating avatar:', error);
       addNotification({

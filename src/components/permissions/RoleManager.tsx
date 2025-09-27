@@ -6,7 +6,7 @@ import {
   User,
   Role,
 } from "../../types";
-import { supabaseService } from "../../services/supabaseService";
+import { nodeApiService } from "../../services/nodeApiService";
 import { useNotifications } from "../../contexts/NotificationContext";
 import { activityLogger } from "../../utils/activityLogger";
 
@@ -50,8 +50,13 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
   const loadRoles = async () => {
     try {
       setIsLoadingRoles(true);
-      const rolesData = await supabaseService.getRoles();
-      setRoles(rolesData);
+      const response = await nodeApiService.getRoles();
+      
+      if (!response.success) {
+        throw new Error(response.error);
+      }
+      
+      setRoles(response.data || []);
     } catch (error) {
       console.error('Error loading roles:', error);
       addNotification({
@@ -129,7 +134,11 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
         is_active: true,
       };
 
-      const createdRole = await supabaseService.createRole(roleData);
+      const response = await nodeApiService.createRole(roleData);
+      if (!response.success) {
+        throw new Error(response.error);
+      }
+      const createdRole = response.data;
       setRoles((prev) => [...prev, createdRole]);
 
       if (onRoleCreate) {
@@ -203,7 +212,11 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
       };
 
       console.log('Updating role:', role.id, 'with data:', updateData);
-      const updatedRole = await supabaseService.updateRole(role.id, updateData);
+      const response = await nodeApiService.updateRole(role.id, updateData);
+      if (!response.success) {
+        throw new Error(response.error);
+      }
+      const updatedRole = response.data;
       console.log('Role updated successfully:', updatedRole);
       setRoles((prev) =>
         prev.map((r) => r.id === role.id ? updatedRole : r)
@@ -262,7 +275,10 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
           userId: currentUser.id
         });
 
-        await supabaseService.deleteRole(roleId);
+        const response = await nodeApiService.deleteRole(roleId);
+        if (!response.success) {
+          throw new Error(response.error);
+        }
         setRoles((prev) => prev.filter((r) => r.id !== roleId));
 
         if (onRoleDelete) {
