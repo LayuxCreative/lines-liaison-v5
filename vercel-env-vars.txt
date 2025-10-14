@@ -3,9 +3,9 @@
 
 NODE_ENV=production
 
-# Supabase Configuration (Required)
-VITE_SUPABASE_URL=https://ymstntjoewkyissepjbc.supabase.co
-VITE_SUPABASE_ANON_KEY=[Copy from your .env file - Supabase Anon Key]
+# Supabase Configuration (Required) - NEW VERCEL INTEGRATED DATABASE
+VITE_SUPABASE_URL=https://mtpnlowzrbdqkbxjgpvm.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10cG5sb3d6cmJkcWtieGpncHZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA0MDg3NTIsImV4cCI6MjA3NTk4NDc1Mn0.IUD1QBy3QUsTAkXaUnp8Cv92YdTQgYnQe-BEtzOUaqo
 
 # App Configuration
 VITE_APP_NAME=LiNES AND LiAiSON Professional Platform
