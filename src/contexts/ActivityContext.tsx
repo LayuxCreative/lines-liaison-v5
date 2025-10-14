@@ -12,7 +12,7 @@ const ActivityContext = createContext<ActivityContextType | undefined>(undefined
 
 function ActivityProvider({ children }: { children: React.ReactNode }) {
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading] = useState(false);
 
   const loadActivities = async () => {
     // Placeholder - will be implemented via Node.js API
@@ -20,7 +20,6 @@ function ActivityProvider({ children }: { children: React.ReactNode }) {
     if (activities.length === 0) {
       setActivities([]);
     }
-    return [];
   };
 
   const addActivity = async (activity: Omit<Activity, "id" | "timestamp">) => {

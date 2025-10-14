@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { Project, ProjectFile, Message, Task } from "../types";
-import { nodeApiService } from "../services/nodeApiService";
+import { supabaseService } from "../services/supabaseService";
 import { useAuth } from "./AuthContext";
 
-// Import FileData interface from nodeApiService
+// Import FileData interface from backendApiService
 interface FileData {
   id: string;
   name: string;
@@ -48,8 +48,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.warn('DataContext: No user ID available for loading projects');
         return;
       }
-      console.log('DataContext: Calling nodeApiService.getProjects with:', targetUserId);
-      const response = await nodeApiService.getProjects(targetUserId);
+      console.log('DataContext: Calling supabaseService.getProjects for projects with:', targetUserId);
+      const response = await supabaseService.getProjects(targetUserId);
       console.log('DataContext: getProjects response:', response);
       
       // Handle the response format correctly
@@ -69,7 +69,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loadFiles = async (projectId: string) => {
     try {
-      const response = await nodeApiService.getFiles(projectId);
+      const response = await supabaseService.getFiles(projectId);
       // Convert FileData to ProjectFile format
       if (response.success && response.data) {
         const filesData = Array.isArray(response.data) ? response.data : [];
@@ -110,7 +110,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loadTasks = async () => {
     try {
       console.log('DataContext: Loading tasks...');
-      const response = await nodeApiService.getTasks();
+      const response = await supabaseService.getTasks();
       console.log('DataContext: getTasks response:', response);
       
       // Handle the response format correctly
@@ -131,7 +131,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loadMessages = async () => {
     try {
       console.log('DataContext: Loading messages...');
-      const response = await nodeApiService.getMessages();
+      const response = await supabaseService.getMessages();
       console.log('DataContext: getMessages response:', response);
       
       // Handle the response format correctly
@@ -151,8 +151,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const addProject = async (projectData: Omit<Project, "id" | "createdAt">) => {
     try {
-      const response = await nodeApiService.createProject(projectData);
-      if (response.data) {
+      const response = await supabaseService.createProject(projectData);
+      if (response.success && response.data) {
         setProjects(prev => [...prev, response.data!]);
       }
     } catch (error) {
@@ -163,7 +163,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateProject = async (id: string, updates: Partial<Project>) => {
     try {
-      const response = await nodeApiService.updateProject(id, updates);
+      const response = await supabaseService.updateProject(id, updates);
       if (response.data) {
         setProjects(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
       }
@@ -175,7 +175,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const addProjectFile = async (projectId: string, file: File): Promise<ProjectFile | undefined> => {
     try {
-      const response = await nodeApiService.uploadFile(file, projectId);
+      const response = await supabaseService.uploadFile(file, projectId);
       if (response.data) {
         // Convert FileData to ProjectFile
         const fileData = response.data;
@@ -215,7 +215,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const addMessage = async (message: Omit<Message, "id" | "timestamp">) => {
     try {
-      const response = await nodeApiService.createMessage(message);
+      const response = await supabaseService.createMessage(message);
       if (response.data) {
         setMessages(prev => [...prev, response.data!]);
       }
@@ -227,7 +227,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const addTask = async (task: Omit<Task, "id" | "createdAt">) => {
     try {
-      const response = await nodeApiService.createTask(task);
+      const response = await supabaseService.createTask(task);
       if (response.data) {
         setTasks(prev => [...prev, response.data!]);
       }
@@ -239,7 +239,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateTask = async (id: string, updates: Partial<Task>) => {
     try {
-      const response = await nodeApiService.updateTask(id, updates);
+      const response = await supabaseService.updateTask(id, updates);
       if (response.data) {
         setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
       }
@@ -318,12 +318,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 };
 
-export function useData() {
+export const useData = () => {
   const context = useContext(DataContext);
   if (context === undefined) {
     throw new Error("useData must be used within a DataProvider");
   }
   return context;
-}
-
-useData.displayName = 'useData';
+};

@@ -119,6 +119,8 @@ const UserStatusSelector: React.FC<UserStatusSelectorProps> = ({
   };
 
   const handleStatusSelect = (status: UserStatusType) => {
+    console.log('🖱️ handleStatusSelect called with status:', status);
+    console.log('📤 Calling onStatusChange...');
     onStatusChange(status);
     setIsOpen(false);
   };

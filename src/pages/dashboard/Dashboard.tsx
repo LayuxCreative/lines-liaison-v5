@@ -17,47 +17,49 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useData } from "../../contexts/DataContext";
-import { useActivity } from "../../contexts/ActivityContext";
+import { getUserDisplayName } from "../../hooks/useRecentActivity";
+import { useSupabaseActivities } from "../../hooks/useSupabaseData";
 import { formatDistanceToNow } from "date-fns";
-import { nodeApiService } from "../../services/nodeApiService";
 import { Project } from "../../types";
-import LocalFileUpload from "../../components/common/LocalFileUpload";
+
+// Component to display user name
+const UserNameDisplay: React.FC<{ userId: string; email?: string }> = ({ userId, email }) => {
+  const [userName, setUserName] = useState<string>(email || 'Loading...');
+  const [isLoading, setIsLoading] = useState<boolean>(!email);
+
+  useEffect(() => {
+    if (!email && userId) {
+      const fetchUserName = async () => {
+        try {
+          setIsLoading(true);
+          const name = await getUserDisplayName(userId);
+          setUserName(name);
+        } catch (error) {
+          console.warn('Failed to fetch user name, using fallback:', error);
+          setUserName('User');
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      fetchUserName();
+    }
+  }, [userId, email]);
+
+  if (isLoading) {
+    return <span className="text-gray-400">Loading...</span>;
+  }
+
+  return <span>{userName}</span>;
+};
+
+
 
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const { getProjectsByUser } = useData();
-  const { activities } = useActivity();
-  const [userNames, setUserNames] = useState<Record<string, string>>({});
-
-
-  // Load user names for activities
-  useEffect(() => {
-    const loadUserNames = async () => {
-      const uniqueUserIds = [...new Set(activities.map(activity => activity.userId))];
-      const names: Record<string, string> = {};
-      
-      for (const userId of uniqueUserIds) {
-        if (userId === user?.id) {
-          names[userId] = user.name || 'Current User';
-        } else {
-          try {
-            const response = await nodeApiService.getUserById(userId);
-            names[userId] = response.data?.name || 'Unknown User';
-          } catch (error) {
-            console.error('Error loading user:', error);
-            names[userId] = 'Unknown User';
-          }
-        }
-      }
-      
-      setUserNames(names);
-    };
-    
-    if (activities.length > 0 && user) {
-      loadUserNames();
-    }
-  }, [activities, user]);
+  // Use direct Supabase connection instead of backend API
+  const { data: activityData } = useSupabaseActivities();
 
   if (!user) return null;
 
@@ -119,19 +121,22 @@ const Dashboard: React.FC = () => {
 
 
 
-  // Get recent activities from DataContext
-  const recentActivities = (activities && Array.isArray(activities) ? activities : []).slice(0, 5).map(activity => ({
+  // Get recent activities using the proper hook
+  const recentActivities = Array.isArray(activityData) ? activityData.map(activity => ({
     id: activity.id,
     type: activity.action,
     description: activity.description,
-    time: formatDistanceToNow(activity.timestamp, { addSuffix: true }),
-    user: userNames[activity.userId] || 'Loading...'
-  }));
+    time: formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true }),
+    user: activity.user_full_name || activity.user_email || activity.user_id || 'Unknown User',
+    userId: activity.user_id,
+    userEmail: activity.user_email
+  })) : [];
 
   const getActivityIcon = (type: string) => {
     switch (type) {
       case "file_upload":
         return FileText;
+      case "project_create":
       case "project_update":
         return CheckCircle;
       case "message":
@@ -339,7 +344,10 @@ const Dashboard: React.FC = () => {
                           {activity.description}
                         </p>
                         <p className="text-xs text-gray-500 mt-1">
-                          {activity.time} • {activity.user}
+                          {activity.time} • {activity.userEmail || 
+                            (activity.userId ? (
+                              <UserNameDisplay userId={activity.userId} email={activity.userEmail} />
+                            ) : 'Unknown User')}
                         </p>
                       </div>
                     </div>
@@ -352,25 +360,7 @@ const Dashboard: React.FC = () => {
 
 
 
-        {/* Local File Storage */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.7, duration: 0.6 }}
-          className="mt-8 bg-white rounded-xl shadow-lg p-6"
-        >
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">
-            Local File Storage
-          </h2>
-          <LocalFileUpload 
-            projectId={userProjects[0]?.id}
-            onFileUploaded={(file) => {
-              console.log('File uploaded locally:', file);
-            }}
-            maxFiles={5}
-            className="max-w-4xl"
-          />
-        </motion.div>
+
 
         {/* Quick Actions */}
         <motion.div

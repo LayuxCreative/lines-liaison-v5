@@ -46,19 +46,34 @@ const Communication: React.FC = () => {
   });
 
   const handleSendMessage = async () => {
-    if (messageText.trim()) {
+    if (messageText.trim() && user) {
       try {
         await activityLogger.log("communication_message_send", "info", "Sending communication message", {
           selectedProject,
           messageLength: messageText.trim().length
         });
         
-        // Handle message sending logic here
-        console.log("Sending message:", messageText);
+        // Create message object
+        const newMessage = {
+          id: Date.now().toString(),
+          content: messageText.trim(),
+          sender: user.full_name || user.name || 'Unknown User',
+          senderRole: user.role,
+          projectId: selectedProject,
+          projectName: selectedProject === "all" ? "General" : userProjects.find(p => p.id === selectedProject)?.name || "Unknown Project",
+          timestamp: new Date(),
+          attachments: []
+        };
+
+        // TODO: Send message to backend/Supabase
+        // For now, just log the message
+        console.log("Message sent:", newMessage);
+        
         setMessageText("");
         
         await activityLogger.log("communication_message_send", "success", "Communication message sent successfully", {
-          selectedProject
+          selectedProject,
+          messageId: newMessage.id
         });
       } catch (error) {
         console.error("Error sending message:", error);

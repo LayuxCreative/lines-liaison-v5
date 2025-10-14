@@ -262,7 +262,9 @@ class LocalFileService {
       a.download = file.name;
       document.body.appendChild(a);
       a.click();
-      document.body.removeChild(a);
+      if (a.parentNode === document.body) {
+        document.body.removeChild(a);
+      }
       URL.revokeObjectURL(url);
 
       return { success: true };

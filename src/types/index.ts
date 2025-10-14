@@ -14,6 +14,10 @@ export interface User {
   last_seen?: Date; // Database field
   preferences?: Record<string, unknown>; // Database field
   additionalPermissions?: string[];
+  // Two-Factor Authentication fields
+  twoFactorEnabled?: boolean;
+  twoFactorSecret?: string;
+  twoFactorBackupCodes?: string[];
   createdAt?: Date;
   created_at?: Date; // Database field
   updated_at?: Date; // Database field
@@ -558,4 +562,45 @@ export interface PermissionItem {
   is_active: boolean;
   created_at: Date;
   updated_at: Date;
+}
+
+// Realtime Types
+export interface RealtimeMessage {
+  id: string;
+  roomId: string;
+  senderId: string;
+  senderName: string;
+  content: string;
+  timestamp: Date;
+  type: 'message' | 'file' | 'system' | 'typing' | 'update';
+  metadata?: Record<string, unknown>;
+}
+
+export interface RealtimeUser {
+  id: string;
+  name: string;
+  email: string;
+  avatar?: string;
+  status: 'online' | 'away' | 'busy' | 'offline';
+  lastSeen?: Date;
+}
+
+export interface ProjectChannel {
+  id: string;
+  projectId: string;
+  projectName: string;
+  participants: string[];
+  lastActivity: Date;
+  isActive: boolean;
+}
+
+export interface TaskChannel {
+  id: string;
+  taskId: string;
+  taskTitle: string;
+  projectId: string;
+  assignees: string[];
+  participants: string[];
+  lastActivity: Date;
+  isActive: boolean;
 }

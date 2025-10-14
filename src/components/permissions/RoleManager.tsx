@@ -6,8 +6,8 @@ import {
   User,
   Role,
 } from "../../types";
-import { nodeApiService } from "../../services/nodeApiService";
-import { useNotifications } from "../../contexts/NotificationContext";
+import { supabaseService } from "../../services/supabaseService";
+import { useNotifications } from "../../hooks/useNotifications";
 import { activityLogger } from "../../utils/activityLogger";
 
 
@@ -50,7 +50,7 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
   const loadRoles = async () => {
     try {
       setIsLoadingRoles(true);
-      const response = await nodeApiService.getRoles();
+      const response = await supabaseService.getRoles();
       
       if (!response.success) {
         throw new Error(response.error);
@@ -134,7 +134,7 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
         is_active: true,
       };
 
-      const response = await nodeApiService.createRole(roleData);
+      const response = await supabaseService.createRole(roleData);
       if (!response.success) {
         throw new Error(response.error);
       }
@@ -212,7 +212,7 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
       };
 
       console.log('Updating role:', role.id, 'with data:', updateData);
-      const response = await nodeApiService.updateRole(role.id, updateData);
+      const response = await supabaseService.updateRole(role.id, updateData);
       if (!response.success) {
         throw new Error(response.error);
       }
@@ -275,7 +275,7 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
           userId: currentUser.id
         });
 
-        const response = await nodeApiService.deleteRole(roleId);
+        const response = await supabaseService.deleteRole(roleId);
         if (!response.success) {
           throw new Error(response.error);
         }

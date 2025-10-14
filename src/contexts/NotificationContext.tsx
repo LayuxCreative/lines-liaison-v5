@@ -1,253 +1,200 @@
-// @refresh reset
-import React, { createContext, useContext, useState, useEffect } from "react";
-import { useAuth } from "./AuthContext";
-import { nodeApiService } from "../services/nodeApiService";
-import { activityLogger } from "../utils/activityLogger";
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { supabaseService } from '../services/supabaseService';
 
-export interface Notification {
+interface Notification {
   id: string;
   title: string;
   message: string;
-  type: "info" | "success" | "warning" | "error";
+  type: 'success' | 'error' | 'warning' | 'info';
   timestamp: Date;
   isRead: boolean;
-  userId: string;
-  projectId?: string;
   actionUrl?: string;
 }
 
 interface NotificationContextType {
   notifications: Notification[];
   unreadCount: number;
-  addNotification: (
-    notification: Omit<Notification, "id" | "timestamp" | "isRead">,
-  ) => void;
-  markAsRead: (notificationId: string) => void;
+  addNotification: (notification: Omit<Notification, 'id' | 'timestamp' | 'isRead'>) => void;
+  markAsRead: (id: string) => void;
   markAllAsRead: () => void;
-  deleteNotification: (notificationId: string) => void;
-  clearAllNotifications: () => void;
+  deleteNotification: (id: string) => void;
+  loadNotifications: () => Promise<void>;
 }
 
-const NotificationContext = createContext<NotificationContextType | undefined>(
-  undefined,
-);
-
-// Supabase data conversion functions
 interface ApiNotification {
   id: string;
   title: string;
   message: string;
   type: string;
   created_at: string;
-  read?: boolean;
-  user_id: string;
-  project_id?: string;
+  is_read: boolean;
   action_url?: string;
 }
 
-const convertSupabaseNotification = (data: ApiNotification): Notification => ({
-  id: data.id,
-  title: data.title,
-  message: data.message,
-  type: (['error', 'success', 'warning', 'info'].includes(data.type) ? data.type : 'info') as Notification['type'],
-  timestamp: new Date(data.created_at),
-  isRead: data.read || false,
-  userId: data.user_id,
-  projectId: data.project_id,
-  actionUrl: data.action_url,
+const convertSupabaseNotification = (apiNotification: ApiNotification): Notification => ({
+  id: apiNotification.id,
+  title: apiNotification.title,
+  message: apiNotification.message,
+  type: apiNotification.type as 'success' | 'error' | 'warning' | 'info',
+  timestamp: new Date(apiNotification.created_at),
+  isRead: apiNotification.is_read,
+  actionUrl: apiNotification.action_url,
 });
 
-// Fix Fast Refresh compatibility - use function declaration
-function NotificationProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
+
+export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Load notifications via Node.js API
-  const loadNotifications = async () => {
-    if (!user?.id) {
-      setNotifications([]);
-      setLoading(false);
-      return;
-    }
-
+  // Memoize the loadNotifications function to prevent unnecessary re-renders
+  const loadNotifications = useCallback(async () => {
+    if (isLoading) return; // Prevent multiple simultaneous loads
+    
     try {
-      setLoading(true);
-      const response = await nodeApiService.getNotifications(user.id);
+      setIsLoading(true);
+      const response = await supabaseService.getNotifications();
+      
       if (response.success && response.data) {
-        setNotifications((response.data as unknown as ApiNotification[]).map(convertSupabaseNotification));
-      } else {
-        setNotifications([]);
+        const convertedNotifications = response.data.map(convertSupabaseNotification);
+        setNotifications(convertedNotifications);
       }
     } catch (error) {
       console.error('Error loading notifications:', error);
-      setNotifications([]);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
-  };
+  }, [isLoading]);
 
+  // Load notifications on mount
   useEffect(() => {
-    let isMounted = true;
-    
-    const loadData = async () => {
-      if (isMounted) {
-        await loadNotifications();
-      }
+    loadNotifications();
+  }, [loadNotifications]);
+
+  // Memoize the addNotification function
+  const addNotification = useCallback((notification: Omit<Notification, 'id' | 'timestamp' | 'isRead'>) => {
+    const newNotification: Notification = {
+      ...notification,
+      id: Date.now().toString(),
+      timestamp: new Date(),
+      isRead: false,
     };
 
-    loadData();
+    // Optimistic UI update
+    setNotifications(prev => [newNotification, ...prev]);
 
-    return () => {
-      isMounted = false;
-    };
-  }, [user?.id]); // Only depend on user.id to prevent unnecessary re-renders
+    // Sync with backend
+    supabaseService.createNotification({
+      title: notification.title,
+      message: notification.message,
+      type: notification.type,
+      action_url: notification.actionUrl,
+    }).catch(error => {
+      console.error('Error creating notification:', error);
+      // Revert optimistic update on error
+      setNotifications(prev => prev.filter(n => n.id !== newNotification.id));
+    });
+  }, []);
 
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
+  // Memoize the markAsRead function
+  const markAsRead = useCallback(async (id: string) => {
+    // Optimistic UI update
+    setNotifications(prev => 
+      prev.map(notification => 
+        notification.id === id 
+          ? { ...notification, isRead: true }
+          : notification
+      )
+    );
 
-  const addNotification = async (
-    notificationData: Omit<Notification, "id" | "timestamp" | "isRead">,
-  ) => {
     try {
-      await activityLogger.log("notification_create", "info", "Creating new notification", {
-        title: notificationData.title,
-        type: notificationData.type,
-        userId: notificationData.userId,
-        projectId: notificationData.projectId,
-      });
-
-      // Optimistic UI update
-      const fallbackNotification: Notification = {
-        id: `temp-${Date.now()}`,
-        ...notificationData,
-        timestamp: new Date(),
-        isRead: false,
-      };
-      setNotifications((prev) => [fallbackNotification, ...prev]);
-
-      const response = await nodeApiService.createNotification({
-        title: notificationData.title,
-        message: notificationData.message,
-        type: notificationData.type,
-        userId: notificationData.userId,
-        projectId: notificationData.projectId,
-        actionUrl: notificationData.actionUrl,
-      });
-
-      if (response.success && response.data) {
-        const newNotification = convertSupabaseNotification(response.data as unknown as ApiNotification);
-        setNotifications((prev) =>
-          prev.map((n) => (n.id === fallbackNotification.id ? newNotification : n)),
-        );
-
-        await activityLogger.log(
-          "notification_create",
-          "success",
-          "Notification created successfully",
-          {
-            notificationId: newNotification.id,
-            title: notificationData.title,
-            userId: notificationData.userId,
-          },
-        );
-      }
+      await supabaseService.markNotificationAsRead(id);
     } catch (error) {
-      console.error("Error adding notification:", error);
-      await activityLogger.log(
-        "notification_create",
-        "error",
-        "Failed to create notification",
-        {
-          title: notificationData.title,
-          userId: notificationData.userId,
-          error: error instanceof Error ? error.message : "Unknown error",
-        },
+      console.error('Error marking notification as read:', error);
+      // Revert optimistic update on error
+      setNotifications(prev => 
+        prev.map(notification => 
+          notification.id === id 
+            ? { ...notification, isRead: false }
+            : notification
+        )
       );
     }
-  };
+  }, []);
 
-  const markAsRead = async (notificationId: string) => {
+  // Memoize the markAllAsRead function
+  const markAllAsRead = useCallback(async () => {
+    const unreadIds = notifications.filter(n => !n.isRead).map(n => n.id);
+    
+    if (unreadIds.length === 0) return;
+
+    // Optimistic UI update
+    setNotifications(prev => 
+      prev.map(notification => ({ ...notification, isRead: true }))
+    );
+
     try {
-      const response = await nodeApiService.markNotificationAsRead(notificationId);
-      if (response.success) {
-        setNotifications((prev) =>
-          prev.map((notification) =>
-            notification.id === notificationId
-              ? { ...notification, isRead: true }
-              : notification,
-          ),
-        );
+      await supabaseService.markAllNotificationsAsRead();
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+      // Revert optimistic update on error
+      setNotifications(prev => 
+        prev.map(notification => 
+          unreadIds.includes(notification.id)
+            ? { ...notification, isRead: false }
+            : notification
+        )
+      );
+    }
+  }, [notifications]);
+
+  // Memoize the deleteNotification function
+  const deleteNotification = useCallback(async (id: string) => {
+    // Optimistic UI update
+    const notificationToDelete = notifications.find(n => n.id === id);
+    setNotifications(prev => prev.filter(notification => notification.id !== id));
+
+    try {
+      await supabaseService.deleteNotification(id);
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+      // Revert optimistic update on error
+      if (notificationToDelete) {
+        setNotifications(prev => [notificationToDelete, ...prev]);
       }
-    } catch (error) {
-      console.error("Error marking notification as read:", error);
     }
-  };
+  }, [notifications]);
 
-  const markAllAsRead = async () => {
-    if (!user) return;
-    try {
-      const response = await nodeApiService.markAllNotificationsAsRead(user.id);
-      if (response.success) {
-        setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-      }
-    } catch (error) {
-      console.error("Error marking all notifications as read:", error);
-    }
-  };
+  // Memoize the unread count calculation
+  const unreadCount = useMemo(() => {
+    return notifications.filter(notification => !notification.isRead).length;
+  }, [notifications]);
 
-  const deleteNotification = async (notificationId: string) => {
-    try {
-      const response = await nodeApiService.deleteNotification(notificationId);
-      if (response.success) {
-        setNotifications((prev) =>
-          prev.filter((notification) => notification.id !== notificationId),
-        );
-      }
-    } catch (error) {
-      console.error("Error deleting notification:", error);
-    }
-  };
-
-  const clearAllNotifications = async () => {
-    if (!user) return;
-    try {
-      const ids = notifications.map((n) => n.id);
-      await Promise.all(ids.map((id) => nodeApiService.deleteNotification(id)));
-      setNotifications([]);
-    } catch (error) {
-      console.error("Error clearing notifications:", error);
-    }
-  };
+  // Memoize the context value to prevent unnecessary re-renders
+  const contextValue = useMemo(() => ({
+    notifications,
+    unreadCount,
+    addNotification,
+    markAsRead,
+    markAllAsRead,
+    deleteNotification,
+    loadNotifications,
+  }), [notifications, unreadCount, addNotification, markAsRead, markAllAsRead, deleteNotification, loadNotifications]);
 
   return (
-    <NotificationContext.Provider
-      value={{
-        notifications,
-        unreadCount,
-        addNotification,
-        markAsRead,
-        markAllAsRead,
-        deleteNotification,
-        clearAllNotifications,
-      }}
-    >
+    <NotificationContext.Provider value={contextValue}>
       {children}
     </NotificationContext.Provider>
   );
-}
+};
 
-function useNotifications() {
+export const useNotifications = () => {
   const context = useContext(NotificationContext);
   if (context === undefined) {
-    throw new Error(
-      "useNotifications must be used within a NotificationProvider",
-    );
+    throw new Error('useNotifications must be used within a NotificationProvider');
   }
   return context;
-}
+};
 
-NotificationProvider.displayName = 'NotificationProvider';
-
-export { NotificationProvider, useNotifications };
-
-export default NotificationProvider;
+// Export the context for backward compatibility
+export { NotificationContext };

@@ -33,7 +33,7 @@ export const getPasswordStrength = (password: string): 'weak' | 'medium' | 'stro
 
 // Phone Validation
 export const isValidPhone = (phone: string): boolean => {
-  const phoneRegex = /^\+?[\d\s\-\(\)]{10,}$/;
+  const phoneRegex = /^\+?[\d\s\-()]{10,}$/;
   return phoneRegex.test(phone);
 };
 
@@ -83,9 +83,8 @@ export const validateFile = (
 };
 
 // Form Validation
-export const isRequired = (value: any): boolean => {
+export const isRequired = (value: unknown): boolean => {
   if (typeof value === 'string') return value.trim().length > 0;
-  if (Array.isArray(value)) return value.length > 0;
   return value !== null && value !== undefined;
 };
 
@@ -132,17 +131,17 @@ export const isPastDate = (date: string | Date): boolean => {
 };
 
 // Object Validation
-export const hasRequiredFields = (obj: Record<string, any>, fields: string[]): boolean => {
+export const hasRequiredFields = (obj: Record<string, unknown>, fields: string[]): boolean => {
   return fields.every(field => isRequired(obj[field]));
 };
 
-// Custom Validation Rules
-export type ValidationRule<T = any> = {
+// Validation Rule Types
+export type ValidationRule<T = unknown> = {
   validator: (value: T) => boolean;
   message: string;
 };
 
-export const createValidator = <T = any>(rules: ValidationRule<T>[]) => {
+export const createValidator = <T = unknown>(rules: ValidationRule<T>[]) => {
   return (value: T): { isValid: boolean; errors: string[] } => {
     const errors: string[] = [];
     

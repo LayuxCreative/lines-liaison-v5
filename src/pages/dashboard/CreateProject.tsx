@@ -3,10 +3,11 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, Calendar, DollarSign, Users, Tag, AlertCircle, FileText, Hash, X, Save } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../../contexts/DataContext';
-import { useNotifications } from '../../contexts/NotificationContext';
+import { useNotifications } from "../../hooks/useNotifications";
+import { useAuth } from '../../contexts/AuthContext';
 import UserStatusIndicator from '../../components/common/UserStatusIndicator';
 import { Project, User, Contract } from "../../types";
-
+import { supabaseService } from '../../services/supabaseService';
 
 interface ProjectFormData {
   name: string;
@@ -27,6 +28,7 @@ interface ProjectFormData {
 
 const CreateProject: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { addProject } = useData();
   const { addNotification } = useNotifications();
   const [isLoading, setIsLoading] = useState(false);
@@ -160,8 +162,7 @@ const CreateProject: React.FC = () => {
         title: 'Project Created',
         message: `Project "${formData.name}" has been created successfully`,
         type: 'success',
-        userId: 'current-user-id', // Replace with actual user ID
-        priority: 'medium'
+        userId: user?.id || 'system'
       });
       
       // Create notifications for team members
@@ -170,8 +171,7 @@ const CreateProject: React.FC = () => {
           title: 'Added to Project',
           message: `You have been added to project "${formData.name}"`,
           type: 'info',
-          userId: memberId,
-          priority: 'medium'
+          userId: memberId
         });
       });
 
@@ -182,8 +182,7 @@ const CreateProject: React.FC = () => {
         title: 'Error',
         message: 'Failed to create project. Please try again.',
         type: 'error',
-        userId: 'current-user-id', // Replace with actual user ID
-        priority: 'high'
+        userId: user?.id || 'system'
       });
     } finally {
       setIsLoading(false);

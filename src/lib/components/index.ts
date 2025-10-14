@@ -84,8 +84,9 @@ export const getAllComponents = () => {
 // Component loading utilities
 export const loadComponent = async (category: ComponentCategory, name: string) => {
   const categoryComponents = COMPONENT_REGISTRY[category];
-  if (categoryComponents && categoryComponents[name as keyof typeof categoryComponents]) {
-    return await categoryComponents[name as keyof typeof categoryComponents]();
+  if (categoryComponents && name in categoryComponents) {
+    const componentLoader = categoryComponents[name as keyof typeof categoryComponents];
+    return await componentLoader();
   }
   throw new Error(`Component ${name} not found in category ${category}`);
 };
@@ -95,7 +96,7 @@ export interface ComponentMetadata {
   name: string;
   category: ComponentCategory;
   description: string;
-  props: Record<string, any>;
+  props: Record<string, unknown>;
   examples?: string[];
 }
 

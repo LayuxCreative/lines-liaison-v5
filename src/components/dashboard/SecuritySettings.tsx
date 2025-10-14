@@ -1,19 +1,22 @@
 import React, { useState, useEffect } from "react";
 import { Eye, EyeOff, Save, AlertTriangle, CheckCircle, Shield, UserCheck, Activity, RefreshCw } from "lucide-react";
-import { useNotifications } from "../../contexts/NotificationContext";
-import { supabase } from "../../lib/supabase";
+import { useNotifications } from "../../hooks/useNotifications";
+import { useAuth } from "../../contexts/AuthContext";
+import { supabaseService } from "../../services/supabaseService";
+import TwoFactorManagement from "./TwoFactorManagement";
 
 interface SecuritySettingsProps {
   settings: {
-    twoFactorAuth: boolean;
-    sessionTimeout: string;
+    twoFactorAuth?: boolean;
+    twoFactorEnabled?: boolean;
+    sessionTimeout: string | number;
     loginNotifications: boolean;
   };
-  onSettingChange: (key: string, value: boolean | string) => void;
+  onSettingChange: (key: string, value: boolean | string | number) => void;
   onPasswordChange: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
-// دالة تقييم قوة كلمة المرور
+// Password strength evaluation function
 const evaluatePasswordStrength = (password: string): { score: number; feedback: string[]; level: string } => {
   let score = 0;
   const feedback: string[] = [];
@@ -21,7 +24,7 @@ const evaluatePasswordStrength = (password: string): { score: number; feedback: 
   if (password.length >= 8) {
     score += 25;
   } else {
-    feedback.push("يجب أن تكون كلمة المرور 8 أحرف على الأقل");
+    feedback.push("Password must be at least 8 characters long");
   }
   
   if (password.length >= 12) score += 10;
@@ -30,51 +33,51 @@ const evaluatePasswordStrength = (password: string): { score: number; feedback: 
   if (/[a-z]/.test(password)) {
     score += 10;
   } else {
-    feedback.push("أضف أحرف صغيرة");
+    feedback.push("Add lowercase letters");
   }
   
   if (/[A-Z]/.test(password)) {
     score += 10;
   } else {
-    feedback.push("أضف أحرف كبيرة");
+    feedback.push("Add uppercase letters");
   }
   
   if (/[0-9]/.test(password)) {
     score += 10;
   } else {
-    feedback.push("أضف أرقام");
+    feedback.push("Add numbers");
   }
   
   if (/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>?]/.test(password)) {
     score += 20;
   } else {
-    feedback.push("أضف رموز خاصة");
+    feedback.push("Add special characters");
   }
   
-  // خصم نقاط للأنماط الضعيفة
+  // Deduct points for weak patterns
   if (/(.)\1{2,}/.test(password)) {
     score -= 10;
-    feedback.push("تجنب تكرار الأحرف");
+    feedback.push("Avoid repeating characters");
   }
   
   if (/123|abc|qwe/i.test(password)) {
     score -= 10;
-    feedback.push("تجنب التسلسل المتوقع");
+    feedback.push("Avoid predictable sequences");
   }
   
   const finalScore = Math.max(0, Math.min(100, score));
-  let level = "ضعيف";
+  let level = "Weak";
   
-  if (finalScore >= 80) level = "قوي جداً";
-  else if (finalScore >= 60) level = "قوي";
-  else if (finalScore >= 40) level = "متوسط";
-  else if (finalScore >= 20) level = "ضعيف";
-  else level = "ضعيف جداً";
+  if (finalScore >= 80) level = "Very Strong";
+  else if (finalScore >= 60) level = "Strong";
+  else if (finalScore >= 40) level = "Medium";
+  else if (finalScore >= 20) level = "Weak";
+  else level = "Very Weak";
   
   return { score: finalScore, feedback, level };
 };
 
-// مكون مؤشر قوة كلمة المرور
+// Password strength indicator component
 const PasswordStrengthIndicator: React.FC<{ password: string }> = ({ password }) => {
   const { score, feedback, level } = evaluatePasswordStrength(password);
   
@@ -99,7 +102,7 @@ const PasswordStrengthIndicator: React.FC<{ password: string }> = ({ password })
   return (
     <div className="mt-2 space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-sm text-gray-600">قوة كلمة المرور:</span>
+        <span className="text-sm text-gray-600">Password Strength:</span>
         <span className={`text-sm font-medium ${getTextColorClass()}`}>
           {level} ({score}%)
         </span>
@@ -114,7 +117,7 @@ const PasswordStrengthIndicator: React.FC<{ password: string }> = ({ password })
       
       {feedback.length > 0 && (
         <div className="text-xs text-gray-500 space-y-1">
-          <p>لتحسين قوة كلمة المرور:</p>
+          <p>To improve password strength:</p>
           <ul className="list-disc list-inside space-y-0.5">
             {feedback.map((item, index) => (
               <li key={index}>{item}</li>
@@ -141,9 +144,9 @@ const SecuritySettings: React.FC<SecuritySettingsProps> = ({
     confirmPassword: "",
   });
   const [isChangingPassword, setIsChangingPassword] = useState(false);
-  const [passwordStrength, setPasswordStrength] = useState({ score: 0, level: "ضعيف" });
+  const [passwordStrength, setPasswordStrength] = useState({ score: 0, level: "Weak" });
 
-  // تحديث قوة كلمة المرور عند تغيير كلمة المرور الجديدة
+  // Update password strength when new password changes
   useEffect(() => {
     if (passwordData.newPassword) {
       const strength = evaluatePasswordStrength(passwordData.newPassword);
@@ -157,8 +160,8 @@ const SecuritySettings: React.FC<SecuritySettingsProps> = ({
     if (passwordData.newPassword !== passwordData.confirmPassword) {
       addNotification({
         type: "error",
-        title: "عدم تطابق كلمة المرور",
-        message: "كلمة المرور الجديدة والتأكيد غير متطابقين.",
+        title: "Password Mismatch",
+        message: "New password and confirmation do not match.",
         userId: "",
         priority: "medium" as const,
       });
@@ -169,8 +172,8 @@ const SecuritySettings: React.FC<SecuritySettingsProps> = ({
     if (strength.score < 60) {
       addNotification({
         type: "error",
-        title: "كلمة مرور ضعيفة",
-        message: "يرجى اختيار كلمة مرور أقوى لضمان أمان حسابك.",
+        title: "Weak Password",
+        message: "Please choose a stronger password to ensure account security.",
         userId: "",
         priority: "medium" as const,
       });
@@ -187,16 +190,16 @@ const SecuritySettings: React.FC<SecuritySettingsProps> = ({
       });
       addNotification({
         type: "success",
-        title: "تم تغيير كلمة المرور",
-        message: "تم تحديث كلمة المرور بنجاح.",
+        title: "Password Changed",
+        message: "Password updated successfully.",
         userId: "",
         priority: "medium" as const,
       });
     } catch {
       addNotification({
         type: "error",
-        title: "فشل في تغيير كلمة المرور",
-        message: "فشل في تغيير كلمة المرور. يرجى التحقق من كلمة المرور الحالية.",
+        title: "Password Change Failed",
+        message: "Failed to change password. Please check your current password.",
         userId: "",
         priority: "medium" as const,
       });
@@ -207,61 +210,28 @@ const SecuritySettings: React.FC<SecuritySettingsProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* تحذير أمني */}
+      {/* Security Warning */}
       <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
         <div className="flex items-start space-x-3">
           <Shield className="h-5 w-5 text-amber-600 mt-0.5" />
           <div>
-            <h4 className="text-sm font-medium text-amber-800">تنبيه أمني</h4>
-            <p className="text-sm text-amber-700 mt-1">
-              تأكد من استخدام كلمة مرور قوية وفريدة لحسابك. تجنب استخدام نفس كلمة المرور في مواقع أخرى.
+            <h4 className="text-sm font-medium text-amber-800">Security Alert</h4>
+            <p className="text-sm text-amber-700">
+              Make sure to use a strong and unique password for your account. Avoid using the same password on other sites.
             </p>
           </div>
         </div>
       </div>
 
+      {/* Two-Factor Authentication */}
+      <TwoFactorManagement />
+
+      {/* Other Security Settings */}
       <div>
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          إعدادات الأمان
+          Session & Notifications
         </h3>
         <div className="space-y-4">
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-            <div>
-              <h4 className="text-sm font-medium text-gray-900">
-                المصادقة الثنائية
-              </h4>
-              <p className="text-sm text-gray-600">
-                أضف طبقة حماية إضافية لحسابك
-              </p>
-            </div>
-            <div className="flex items-center space-x-3">
-              {settings.twoFactorAuth ? (
-                <span className="flex items-center space-x-1 text-green-600 text-sm font-medium">
-                  <CheckCircle className="w-4 h-4" />
-                  <span>Enabled</span>
-                </span>
-              ) : (
-                <span className="flex items-center space-x-1 text-red-600 text-sm font-medium">
-                  <AlertTriangle className="w-4 h-4" />
-                  <span>Disabled</span>
-                </span>
-              )}
-              <button
-                onClick={() =>
-                  onSettingChange("twoFactorAuth", !settings.twoFactorAuth)
-                }
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  settings.twoFactorAuth
-                    ? "bg-red-100 text-red-700 hover:bg-red-200"
-                    : "bg-blue-100 text-blue-700 hover:bg-blue-200"
-                }`}
-              >
-                {settings.twoFactorAuth ? "Disable" : "Enable"}
-              </button>
-            </div>
-            <PasswordStrengthIndicator password={passwordData.newPassword} />
-          </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Session Timeout
@@ -417,11 +387,11 @@ const SecuritySettings: React.FC<SecuritySettingsProps> = ({
         </form>
       </div>
 
-      {/* قسم أمان كلمات المرور */}
+      {/* Password Security Section */}
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="flex items-center space-x-3 mb-6">
           <UserCheck className="w-6 h-6 text-blue-600" />
-          <h3 className="text-xl font-semibold text-gray-800">أمان كلمات المرور</h3>
+          <h3 className="text-xl font-semibold text-gray-800">Password Security</h3>
         </div>
 
         <div className="space-y-4">
@@ -429,12 +399,12 @@ const SecuritySettings: React.FC<SecuritySettingsProps> = ({
             <div className="flex items-start space-x-3">
               <Shield className="w-5 h-5 text-blue-600 mt-0.5" />
               <div>
-                <h4 className="font-medium text-blue-800 mb-2">متطلبات كلمة المرور القوية</h4>
+                <h4 className="font-medium text-blue-800 mb-2">Strong Password Requirements</h4>
                 <ul className="text-sm text-blue-700 space-y-1">
-                  <li>• 8 أحرف على الأقل</li>
-                  <li>• أحرف كبيرة وصغيرة</li>
-                  <li>• أرقام ورموز خاصة</li>
-                  <li>• تجنب كلمات المرور الشائعة</li>
+                  <li>• At least 8 characters</li>
+                  <li>• Upper and lowercase letters</li>
+                  <li>• Numbers and special characters</li>
+                  <li>• Avoid common passwords</li>
                 </ul>
               </div>
             </div>
@@ -445,28 +415,28 @@ const SecuritySettings: React.FC<SecuritySettingsProps> = ({
               <div className="flex items-center space-x-3">
                 <CheckCircle className="w-5 h-5 text-green-600" />
                 <div>
-                  <h4 className="font-medium text-green-800">حالة أمان كلمة المرور</h4>
-                  <p className="text-sm text-green-700">كلمة المرور الحالية تلبي معايير الأمان</p>
+                  <h4 className="font-medium text-green-800">Password Security Status</h4>
+                  <p className="text-sm text-green-700">Current password meets security standards</p>
                 </div>
               </div>
               <div className="text-right">
                 <div className="text-2xl font-bold text-green-600">100%</div>
-                <div className="text-xs text-green-600">نقاط الأمان</div>
+                <div className="text-xs text-green-600">Security Score</div>
               </div>
             </div>
           </div>
 
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
-              <h4 className="font-medium text-gray-800">آخر فحص أمان</h4>
+              <h4 className="font-medium text-gray-800">Last Security Check</h4>
               <button className="flex items-center space-x-2 text-blue-600 hover:text-blue-700 text-sm">
                 <RefreshCw className="w-4 h-4" />
-                <span>فحص الآن</span>
+                <span>Check Now</span>
               </button>
             </div>
             <div className="flex items-center space-x-2 text-sm text-gray-600">
               <Activity className="w-4 h-4" />
-              <span>تم الفحص منذ دقائق قليلة</span>
+              <span>Checked a few minutes ago</span>
             </div>
           </div>
         </div>

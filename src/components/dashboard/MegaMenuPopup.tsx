@@ -154,6 +154,11 @@ const MegaMenuPopup: React.FC<MegaMenuPopupProps> = ({ isOpen, onClose }) => {
     onClose();
   };
 
+  const handleUsersActivity = () => {
+    navigate("/dashboard/users-activity");
+    onClose();
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -444,6 +449,15 @@ const MegaMenuPopup: React.FC<MegaMenuPopupProps> = ({ isOpen, onClose }) => {
                         <Settings className="w-4 h-4 text-gray-400 group-hover:text-gray-600" />
                         <span className="text-sm text-gray-700 group-hover:text-gray-600">
                           System
+                        </span>
+                      </button>
+                      <button
+                        onClick={handleUsersActivity}
+                        className="flex items-center space-x-2 p-1.5 hover:bg-gray-50 rounded-md transition-colors group w-full text-left"
+                      >
+                        <Users className="w-4 h-4 text-gray-400 group-hover:text-gray-600" />
+                        <span className="text-sm text-gray-700 group-hover:text-gray-600">
+                          Users & Activity
                         </span>
                       </button>
                     </div>

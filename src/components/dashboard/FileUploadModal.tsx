@@ -9,8 +9,9 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useData } from "../../contexts/DataContext";
-import { useNotifications } from "../../contexts/NotificationContext";
+import { useNotifications } from "../../hooks/useNotifications";
 import { activityLogger } from "../../utils/activityLogger";
+import { fileStorageService } from "../../services/storageService";
 
 interface FileUploadModalProps {
   isOpen: boolean;
@@ -88,15 +89,15 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
 
       setUploadFiles((prev) => [...prev, ...newUploadFiles]);
 
-      // Simulate upload process
+      // Upload files to Supabase Storage
       newUploadFiles.forEach((uploadFile) => {
-        simulateUpload(uploadFile);
+        realUpload(uploadFile);
       });
     },
     [selectedProject, addNotification],
   );
 
-  const simulateUpload = useCallback(
+  const realUpload = useCallback(
     async (uploadFile: UploadFile) => {
       const { file, id } = uploadFile;
 
@@ -109,21 +110,29 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
           userId: user?.id
         });
 
-        // Simulate upload progress
-        for (let progress = 0; progress <= 100; progress += 10) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
+        // Update progress to show upload starting
+        setUploadFiles((prev) =>
+          prev.map((uf) => (uf.id === id ? { ...uf, progress: 10 } : uf)),
+        );
 
-          setUploadFiles((prev) =>
-            prev.map((uf) => (uf.id === id ? { ...uf, progress } : uf)),
-          );
-        }
+        // Upload to Supabase Storage
+        const uploadResult = await fileStorageService.uploadFile(
+          file,
+          'files',
+          `projects/${selectedProject}`
+        );
+
+        // Update progress to show upload completing
+        setUploadFiles((prev) =>
+          prev.map((uf) => (uf.id === id ? { ...uf, progress: 90 } : uf)),
+        );
 
         // Create file object
         const newFile = {
           name: file.name,
           type: file.type,
           size: file.size,
-          url: URL.createObjectURL(file),
+          url: uploadResult.url,
           projectId: selectedProject,
           uploadedBy: user?.id || "1",
           uploadedAt: new Date(),
@@ -141,12 +150,13 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
               userName: user?.name || "Unknown User",
               action: "upload" as const,
               timestamp: new Date(),
-              details: "File uploaded",
+              details: "File uploaded to Supabase Storage",
             },
           ],
           versions: [],
           viewCount: 0,
           downloadCount: 0,
+          storagePath: uploadResult.path,
         };
 
         // Add file to project
@@ -155,7 +165,7 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
         // Mark as completed
         setUploadFiles((prev) =>
           prev.map((uf) =>
-            uf.id === id ? { ...uf, status: "completed" as const } : uf,
+            uf.id === id ? { ...uf, status: "completed" as const, progress: 100 } : uf,
           ),
         );
 
@@ -163,7 +173,8 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
           fileName: file.name,
           fileSize: file.size,
           projectId: selectedProject,
-          userId: user?.id
+          userId: user?.id,
+          storageUrl: uploadResult.url
         });
 
         const uploadedFileData = {
@@ -182,14 +193,14 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
           version: 1,
           lastViewedBy: undefined,
           lastViewedAt: undefined,
+          url: uploadResult.url,
         };
 
         // Show success notification
         addNotification({
           type: "success",
           title: "File Uploaded Successfully",
-          message: `${file.name} has been uploaded to the project`,
-          priority: "medium",
+        message: `${file.name} uploaded to Supabase Storage`,
           userId: user?.id || "1",
         });
 

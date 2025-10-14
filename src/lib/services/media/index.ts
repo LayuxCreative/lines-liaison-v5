@@ -8,7 +8,7 @@ export interface MediaFile {
   size: number;
   url: string;
   thumbnail?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -116,7 +116,7 @@ export const getVideoThumbnail = (file: File): Promise<Blob> => {
 };
 
 // Audio processing utilities
-export const getAudioMetadata = (file: File): Promise<Record<string, any>> => {
+export const getAudioMetadata = (file: File): Promise<Record<string, unknown>> => {
   return new Promise((resolve, reject) => {
     const audio = document.createElement('audio');
     
@@ -195,7 +195,7 @@ export class MediaService {
       }
 
       // Get metadata based on file type
-      let metadata: Record<string, any> = {};
+      let metadata: Record<string, unknown> = {};
       
       if (file.type.startsWith('image/')) {
         metadata.type = 'image';
@@ -243,10 +243,10 @@ export class MediaService {
         file: mediaFile,
         thumbnail: thumbnailUrl
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        error: error.message || 'Media upload failed'
+        error: error instanceof Error ? error.message : 'Media upload failed'
       };
     }
   }
@@ -284,16 +284,16 @@ export class MediaService {
 
       const result = await storageService.deleteFiles(bucket, filesToDelete);
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        error: error.message || 'Delete failed'
+        error: error instanceof Error ? error.message : 'Media deletion failed'
       };
     }
   }
 
   // Get media file info
-  async getMediaInfo(path: string): Promise<{ success: boolean; info?: any; error?: string }> {
+  async getMediaInfo(path: string): Promise<{ success: boolean; info?: unknown; error?: string }> {
     return storageService.getFileInfo('media', path);
   }
 
@@ -305,7 +305,7 @@ export class MediaService {
       offset?: number;
       sortBy?: { column: string; order: 'asc' | 'desc' };
     }
-  ): Promise<{ success: boolean; files?: any[]; error?: string }> {
+  ): Promise<{ success: boolean; files?: unknown[]; error?: string }> {
     return storageService.listFiles('media', folder, options);
   }
 
@@ -349,10 +349,10 @@ export class MediaService {
         success: true,
         file: compressedFile
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        error: error.message || 'Compression failed'
+        error: error instanceof Error ? error.message : 'Image compression failed'
       };
     }
   }
@@ -414,10 +414,10 @@ export class MediaService {
 
         img.src = URL.createObjectURL(file);
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        error: error.message || 'Conversion failed'
+        error: error instanceof Error ? error.message : 'Image format conversion failed'
       };
     }
   }

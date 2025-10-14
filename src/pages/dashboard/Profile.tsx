@@ -22,7 +22,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useData } from "../../contexts/DataContext";
 import { format } from "date-fns";
 import ImageUploader from "../../components/common/ImageUploader";
-import { useNotifications } from "../../contexts/NotificationContext";
+import { useNotifications } from "../../hooks/useNotifications";
 
 const Profile: React.FC = () => {
   const { user, updateUserProfile, refreshUserProfile } = useAuth();
@@ -169,14 +169,17 @@ const Profile: React.FC = () => {
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between">
               <div className="flex items-center space-x-6 mb-6 md:mb-0">
                 <div className="relative">
-                  <img
-                    src={
-                      user.avatar_url || user.avatar ||
-                      "https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop"
-                    }
-                    alt={user.name}
-                    className="w-24 h-24 rounded-full object-cover shadow-lg"
-                  />
+                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+                    {user.avatar_url || user.avatar ? (
+                      <img
+                        src={user.avatar_url || user.avatar}
+                        alt={user.name}
+                        className="w-24 h-24 rounded-full object-cover shadow-lg"
+                      />
+                    ) : (
+                      user.name?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase() || 'U'
+                    )}
+                  </div>
                   {isEditing && (
                     <button 
                       onClick={() => setShowImageUploader(true)}
@@ -306,10 +309,22 @@ const Profile: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Email Address
                 </label>
-                <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-xl">
-                  <Mail className="w-5 h-5 text-gray-400" />
-                  <span className="text-gray-900">{user.email}</span>
-                </div>
+                {isEditing ? (
+                  <input
+                    type="email"
+                    value={editedUser?.email || ""}
+                    onChange={(e) =>
+                      setEditedUser({ ...editedUser!, email: e.target.value })
+                    }
+                    autoComplete="email"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300"
+                  />
+                ) : (
+                  <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-xl">
+                    <Mail className="w-5 h-5 text-gray-400" />
+                    <span className="text-gray-900">{user.email}</span>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">

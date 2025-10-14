@@ -4,7 +4,7 @@ import React from 'react';
 // Form Types
 export interface FormProps {
   children: React.ReactNode;
-  onSubmit: (data: Record<string, any>) => void;
+  onSubmit: (data: Record<string, unknown>) => void;
   validation?: ValidationSchema;
   className?: string;
 }
@@ -15,9 +15,9 @@ export interface ValidationSchema {
 
 export interface ValidationRule {
   type: 'required' | 'email' | 'minLength' | 'maxLength' | 'pattern' | 'custom';
-  value?: any;
+  value?: unknown;
   message: string;
-  validator?: (value: any) => boolean;
+  validator?: (value: unknown) => boolean;
 }
 
 // Field Types
@@ -86,46 +86,52 @@ export interface FormGroupProps {
 }
 
 // Form utilities
-export const validateField = (value: any, rules: ValidationRule[]): string | null => {
+export const validateField = (value: unknown, rules: ValidationRule[]): string | null => {
   for (const rule of rules) {
     switch (rule.type) {
-      case 'required':
+      case 'required': {
         if (!value || (typeof value === 'string' && value.trim() === '')) {
           return rule.message;
         }
         break;
-      case 'email':
+      }
+      case 'email': {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (value && !emailRegex.test(value)) {
+        if (value && !emailRegex.test(value as string)) {
           return rule.message;
         }
         break;
-      case 'minLength':
-        if (value && value.length < rule.value) {
+      }
+      case 'minLength': {
+        if (value && typeof value === 'string' && typeof rule.value === 'number' && value.length < rule.value) {
           return rule.message;
         }
         break;
-      case 'maxLength':
-        if (value && value.length > rule.value) {
+      }
+      case 'maxLength': {
+        if (value && typeof value === 'string' && typeof rule.value === 'number' && value.length > rule.value) {
           return rule.message;
         }
         break;
-      case 'pattern':
-        if (value && !rule.value.test(value)) {
+      }
+      case 'pattern': {
+        if (value && rule.value instanceof RegExp && !rule.value.test(value as string)) {
           return rule.message;
         }
         break;
-      case 'custom':
+      }
+      case 'custom': {
         if (rule.validator && !rule.validator(value)) {
           return rule.message;
         }
         break;
+      }
     }
   }
   return null;
 };
 
-export const validateForm = (data: Record<string, any>, schema: ValidationSchema): Record<string, string> => {
+export const validateForm = (data: Record<string, unknown>, schema: ValidationSchema): Record<string, string> => {
   const errors: Record<string, string> = {};
   
   for (const [fieldName, rules] of Object.entries(schema)) {

@@ -174,7 +174,7 @@ const CallManager: React.FC<CallManagerProps> = ({
     };
   }, [socketService, webrtcService, currentUser.id, startCallTimer]);
 
-  // WebRTC event handlers
+  // Initialize WebRTC event handlers
   useEffect(() => {
     const handleLocalStream = (stream: MediaStream) => {
       setLocalStream(stream);
@@ -210,23 +210,52 @@ const CallManager: React.FC<CallManagerProps> = ({
       socketService.sendSignal(peerId, signal);
     };
 
-    webrtcService.on("localStream", handleLocalStream as EventHandler);
-    webrtcService.on("remoteStream", handleRemoteStream as EventHandler);
-    webrtcService.on("peerDisconnected", handlePeerDisconnected as EventHandler);
-    webrtcService.on("signalNeeded", handleSignalNeeded as EventHandler);
+    // Type-safe event handler wrappers
+    const localStreamHandler: EventHandler = (...args: unknown[]) => {
+      const [stream] = args;
+      if (stream instanceof MediaStream) {
+        handleLocalStream(stream);
+      }
+    };
+
+    const remoteStreamHandler: EventHandler = (...args: unknown[]) => {
+      const [peerId, stream] = args;
+      if (typeof peerId === 'string' && stream instanceof MediaStream) {
+        handleRemoteStream(peerId, stream);
+      }
+    };
+
+    const peerDisconnectedHandler: EventHandler = (...args: unknown[]) => {
+      const [peerId] = args;
+      if (typeof peerId === 'string') {
+        handlePeerDisconnected(peerId);
+      }
+    };
+
+    const signalNeededHandler: EventHandler = (...args: unknown[]) => {
+      const [peerId, signal] = args;
+      if (typeof peerId === 'string' && signal && typeof signal === 'object') {
+        handleSignalNeeded(peerId, signal as SimplePeer.SignalData);
+      }
+    };
+
+    webrtcService.on("localStream", localStreamHandler);
+    webrtcService.on("remoteStream", remoteStreamHandler);
+    webrtcService.on("peerDisconnected", peerDisconnectedHandler);
+    webrtcService.on("signalNeeded", signalNeededHandler);
 
     return () => {
-      webrtcService.off("localStream", handleLocalStream as EventHandler);
-      webrtcService.off("remoteStream", handleRemoteStream as EventHandler);
-      webrtcService.off("peerDisconnected", handlePeerDisconnected as EventHandler);
-      webrtcService.off("signalNeeded", handleSignalNeeded as EventHandler);
+      webrtcService.off("localStream", localStreamHandler);
+      webrtcService.off("remoteStream", remoteStreamHandler);
+      webrtcService.off("peerDisconnected", peerDisconnectedHandler);
+      webrtcService.off("signalNeeded", signalNeededHandler);
     };
-  }, [webrtcService, socketService, endCall]);
+  }, [webrtcService, socketService]);
 
 
 
   // Accept incoming call
-  const acceptCall = async () => {
+  const acceptCall = useCallback(async () => {
     if (!incomingCall) return;
 
     const callTimeout = setTimeout(() => {
@@ -299,7 +328,7 @@ const CallManager: React.FC<CallManagerProps> = ({
       alert(`Failed to accept call: ${errorMessage}`);
       setIncomingCall(null);
     }
-  }, [callState, currentUser.id, localStream, onCallEnd, stopCallTimer, webrtcService, socketService]);
+  }, [callState, currentUser.id, localStream, onCallEnd, stopCallTimer, webrtcService, socketService, incomingCall, startCallTimer]);
 
   // Reject incoming call
   const rejectCall = async () => {
@@ -442,7 +471,7 @@ const CallManager: React.FC<CallManagerProps> = ({
       stopCallTimer();
       onCallEnd?.();
     }
-  };
+  }, [callState, localStream, webrtcService, socketService, stopCallTimer, onCallEnd, currentUser.id]);
 
   // Toggle audio
   const toggleAudio = async () => {

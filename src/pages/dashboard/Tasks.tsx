@@ -20,11 +20,12 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useData } from "../../contexts/DataContext";
-
 import { format, formatDistanceToNow } from "date-fns";
+import CreateTaskModal from '../../components/dashboard/CreateTaskModal';
 
 // Utility function to check if a task is overdue
-const isOverdue = (dueDate: Date): boolean => {
+const isOverdue = (dueDate: Date | null | undefined): boolean => {
+  if (!dueDate) return false;
   return new Date() > dueDate;
 };
 
@@ -38,10 +39,27 @@ const Tasks: React.FC = () => {
   const [projectFilter, setProjectFilter] = useState("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
   const [sortBy, setSortBy] = useState("dueDate");
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   const userProjects = user ? getProjectsByUser(user.id, user.role) : [];
 
-  // Remove unused getStatusIcon function
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "todo":
+        return Clock;
+      case "in_progress":
+        return Play;
+      case "review":
+        return AlertCircle;
+      case "completed":
+        return CheckCircle;
+      case "blocked":
+        return Pause;
+      default:
+        return Clock;
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "todo":
@@ -113,6 +131,9 @@ const Tasks: React.FC = () => {
     filtered.sort((a, b) => {
       switch (sortBy) {
         case "dueDate":
+          if (!a.dueDate && !b.dueDate) return 0;
+          if (!a.dueDate) return 1;
+          if (!b.dueDate) return -1;
           return a.dueDate.getTime() - b.dueDate.getTime();
         case "priority": {
           const priorityOrder = { urgent: 4, high: 3, medium: 2, low: 1 };
@@ -201,9 +222,7 @@ const Tasks: React.FC = () => {
             </div>
             {(user.role === "admin" || user.role === "project_manager") && (
               <button
-                onClick={() =>
-                  alert("Create Task functionality will be implemented")
-                }
+                onClick={() => setIsCreateModalOpen(true)}
                 className="mt-4 sm:mt-0 inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-teal-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-teal-700 transition-all duration-300 transform hover:scale-105 shadow-lg"
               >
                 <Plus className="w-5 h-5 mr-2" />
@@ -414,7 +433,6 @@ const Tasks: React.FC = () => {
             {viewMode === "grid" ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredTasks.map((task, index) => {
-                  // Remove unused StatusIcon variable
                   const isTaskOverdue =
                     task.status !== "completed" && isOverdue(task.dueDate);
                   const project = userProjects.find(
@@ -463,19 +481,19 @@ const Tasks: React.FC = () => {
                         </p>
 
                         {/* Tags */}
-                        {task.tags.length > 0 && (
+                        {(task.tags?.length || 0) > 0 && (
                           <div className="flex flex-wrap gap-1 mb-4">
-                            {task.tags.slice(0, 3).map((tag, tagIndex) => (
+                            {task.tags?.slice(0, 3).map((tag, tagIndex) => (
                               <span
                                 key={tagIndex}
                                 className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full"
                               >
                                 {tag}
                               </span>
-                            ))}
-                            {task.tags.length > 3 && (
+                            )) || []}
+                            {(task.tags?.length || 0) > 3 && (
                               <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
-                                +{task.tags.length - 3}
+                                +{(task.tags?.length || 0) - 3}
                               </span>
                             )}
                           </div>
@@ -494,7 +512,7 @@ const Tasks: React.FC = () => {
                           >
                             <Calendar className="w-4 h-4" />
                             <span className="text-sm">
-                              {format(task.dueDate, "MMM dd")}
+                              {task.dueDate ? format(task.dueDate, "MMM dd") : "No due date"}
                             </span>
                           </div>
                         </div>
@@ -502,19 +520,19 @@ const Tasks: React.FC = () => {
                         {/* Progress and Actions */}
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-2">
-                            {task.attachedFiles.length > 0 && (
+                            {(task.attachedFiles?.length || 0) > 0 && (
                               <div className="flex items-center space-x-1 text-gray-500">
                                 <Paperclip className="w-4 h-4" />
                                 <span className="text-xs">
-                                  {task.attachedFiles.length}
+                                  {task.attachedFiles?.length || 0}
                                 </span>
                               </div>
                             )}
-                            {task.comments.length > 0 && (
+                            {(task.comments?.length || 0) > 0 && (
                               <div className="flex items-center space-x-1 text-gray-500">
                                 <MessageSquare className="w-4 h-4" />
                                 <span className="text-xs">
-                                  {task.comments.length}
+                                  {task.comments?.length || 0}
                                 </span>
                               </div>
                             )}
@@ -570,7 +588,7 @@ const Tasks: React.FC = () => {
                     </thead>
                     <tbody className="divide-y divide-gray-200">
                       {filteredTasks.map((task) => {
-                        // Remove unused StatusIcon variable
+                        const StatusIcon = getStatusIcon(task.status);
                         const isTaskOverdue =
                           task.status !== "completed" &&
                           isOverdue(task.dueDate);
@@ -595,18 +613,18 @@ const Tasks: React.FC = () => {
                                   <p className="text-sm text-gray-500 truncate">
                                     {task.description}
                                   </p>
-                                  {task.tags.length > 0 && (
+                                  {(task.tags?.length || 0) > 0 && (
                                     <div className="flex flex-wrap gap-1 mt-1">
                                       {task.tags
-                                        .slice(0, 2)
-                                        .map((tag, index) => (
+                                        ?.slice(0, 2)
+                                        ?.map((tag, index) => (
                                           <span
                                             key={index}
                                             className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full"
                                           >
                                             {tag}
                                           </span>
-                                        ))}
+                                        )) || []}
                                     </div>
                                   )}
                                 </div>
@@ -624,12 +642,7 @@ const Tasks: React.FC = () => {
                             </td>
                             <td className="px-6 py-4">
                               <div className="flex items-center space-x-2">
-                                {/* Remove StatusIcon and use appropriate icon based on status */}
-                                {task.status === "todo" && <Clock className="w-4 h-4 text-gray-400" />}
-                                {task.status === "in_progress" && <Play className="w-4 h-4 text-blue-400" />}
-                                {task.status === "review" && <AlertCircle className="w-4 h-4 text-yellow-400" />}
-                                {task.status === "completed" && <CheckCircle className="w-4 h-4 text-green-400" />}
-                                {task.status === "blocked" && <Pause className="w-4 h-4 text-red-400" />}
+                                <StatusIcon className="w-4 h-4" />
                                 <span
                                   className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}
                                 >
@@ -651,8 +664,8 @@ const Tasks: React.FC = () => {
                               <div
                                 className={`text-sm ${isTaskOverdue ? "text-red-600 font-medium" : "text-gray-900"}`}
                               >
-                                {format(task.dueDate, "MMM dd, yyyy")}
-                                {isTaskOverdue && (
+                                {task.dueDate ? format(task.dueDate, "MMM dd, yyyy") : "No due date"}
+                                {isTaskOverdue && task.dueDate && (
                                   <span className="block text-xs text-red-500">
                                     {formatDistanceToNow(task.dueDate)} overdue
                                   </span>
@@ -661,19 +674,19 @@ const Tasks: React.FC = () => {
                             </td>
                             <td className="px-6 py-4">
                               <div className="flex items-center space-x-2">
-                                {task.attachedFiles.length > 0 && (
+                                {(task.attachedFiles?.length || 0) > 0 && (
                                   <div className="flex items-center space-x-1 text-gray-500">
                                     <Paperclip className="w-4 h-4" />
                                     <span className="text-xs">
-                                      {task.attachedFiles.length}
+                                      {task.attachedFiles?.length || 0}
                                     </span>
                                   </div>
                                 )}
-                                {task.comments.length > 0 && (
+                                {(task.comments?.length || 0) > 0 && (
                                   <div className="flex items-center space-x-1 text-gray-500">
                                     <MessageSquare className="w-4 h-4" />
                                     <span className="text-xs">
-                                      {task.comments.length}
+                                      {task.comments?.length || 0}
                                     </span>
                                   </div>
                                 )}
@@ -738,6 +751,11 @@ const Tasks: React.FC = () => {
           </motion.div>
         )}
       </div>
+      
+      <CreateTaskModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+      />
     </div>
   );
 };

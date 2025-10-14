@@ -1,9 +1,7 @@
-import React, { useState, useCallback } from "react";
-import { PermissionRestriction, User, Permission } from "../../types";
+import React, { useState } from "react";
+import { PermissionRestriction, Permission } from "../../types";
 
 interface PermissionRestrictionsProps {
-  currentUser: User;
-  users: User[];
   permissions: Permission[];
   restrictions: PermissionRestriction[];
   onRestrictionCreate?: (
@@ -20,14 +18,12 @@ type RestrictionType = "time_based" | "ip_based" | "project_based" | "custom";
 
 interface NewRestriction {
   type: RestrictionType;
-  conditions: Record<string, any>;
+  conditions: Record<string, string | number | boolean>;
   isActive: boolean;
   expiresAt?: Date;
 }
 
 export const PermissionRestrictions: React.FC<PermissionRestrictionsProps> = ({
-  currentUser,
-  users,
   permissions,
   restrictions,
   onRestrictionCreate,
@@ -39,7 +35,6 @@ export const PermissionRestrictions: React.FC<PermissionRestrictionsProps> = ({
   );
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<RestrictionType | "all">("all");
-  const [selectedUser, setSelectedUser] = useState<string>("all");
 
   const [newRestriction, setNewRestriction] = useState<NewRestriction>({
     type: "time_based",
@@ -726,7 +721,7 @@ export const PermissionRestrictions: React.FC<PermissionRestrictionsProps> = ({
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id as "overview" | "create" | "manage")}
               className={`
                 py-2 px-1 border-b-2 font-medium text-sm transition-colors
                 ${

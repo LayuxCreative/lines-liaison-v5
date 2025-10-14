@@ -6,8 +6,14 @@ import { DataProvider } from "./contexts/DataContext";
 import { NotificationProvider } from "./contexts/NotificationContext";
 import { ActivityProvider } from "./contexts/ActivityContext";
 import ErrorBoundary from "./components/common/ErrorBoundary";
+import { initializePerformanceMonitoring } from "./services/performanceMonitoringService";
+import cacheService from "./services/cacheService";
 
 import "./index.css";
+
+// Initialize services
+initializePerformanceMonitoring();
+cacheService.initialize().catch(console.warn);
 
 const AppWithProviders = () => {
   return (

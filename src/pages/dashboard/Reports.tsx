@@ -1,83 +1,94 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { motion } from 'framer-motion';
-import { 
-  Calendar, 
-  Filter, 
-  Download, 
-  Search, 
-  User, 
+import React, { useState, useCallback, useEffect } from "react";
+import { motion } from "framer-motion";
+import {
   Activity,
   TrendingUp,
-  Users
-} from 'lucide-react';
-
-interface ActivityRecord {
-  id: string;
-  project_id: string;
-  user_id: string;
-  action: string;
-  description: string;
-  timestamp: string;
-  metadata: Record<string, unknown>;
-}
+  Users,
+  User,
+  Download,
+  Filter,
+  Search,
+  Calendar,
+} from "lucide-react";
+import { useRecentActivity, formatActivityMessage, getUserDisplayName, type ActivityLog } from "../../hooks/useRecentActivity";
 
 interface FilterOptions {
-  dateFrom: string;
-  dateTo: string;
+  dateFrom?: string;
+  dateTo?: string;
   action: string;
   userId: string;
   search: string;
 }
 
+// Component to display user name
+const UserNameDisplay: React.FC<{ userId: string }> = ({ userId }) => {
+  const [userName, setUserName] = useState<string>('Loading...');
+
+  useEffect(() => {
+    const fetchUserName = async () => {
+      const name = await getUserDisplayName(userId);
+      setUserName(name);
+    };
+    fetchUserName();
+  }, [userId]);
+
+  return <span>{userName}</span>;
+};
+
 const Reports: React.FC = () => {
-  const [activities, setActivities] = useState<ActivityRecord[]>([]);
-  const [filteredActivities, setFilteredActivities] = useState<ActivityRecord[]>([]);
+  const { activities, loading } = useRecentActivity({ limit: 100 });
+  const [filteredActivities, setFilteredActivities] = useState<ActivityLog[]>([]);
   const [filters, setFilters] = useState<FilterOptions>({
-    dateFrom: '',
-    dateTo: '',
-    action: '',
-    userId: '',
-    search: ''
+    action: "",
+    userId: "",
+    search: "",
   });
 
   const actionTypes = [
-    'user_login',
-    'user_logout',
-    'project_created',
-    'project_updated',
-    'task_created',
-    'task_updated',
-    'file_uploaded',
-    'comment_added'
+    "user_login",
+    "user_logout", 
+    "profile_update",
+    "project_create",
+    "project_update",
+    "project_delete",
+    "file_upload",
+    "file_download",
+    "task_create",
+    "task_update",
+    "task_complete"
   ];
 
   const applyFilters = useCallback(() => {
-    let filtered = [...activities];
+    let filtered = activities;
 
-    // Date filter
+    // Date filters
     if (filters.dateFrom) {
+      const fromDate = new Date(filters.dateFrom);
       filtered = filtered.filter(activity => 
-        new Date(activity.timestamp) >= new Date(filters.dateFrom)
+        new Date(activity.occurred_at) >= fromDate
       );
     }
 
     if (filters.dateTo) {
+      const toDate = new Date(filters.dateTo);
+      toDate.setHours(23, 59, 59, 999);
       filtered = filtered.filter(activity => 
-        new Date(activity.timestamp) <= new Date(filters.dateTo)
+        new Date(activity.occurred_at) <= toDate
       );
     }
 
     // Action filter
     if (filters.action) {
       filtered = filtered.filter(activity => 
-        activity.action === filters.action
+        activity.event_type === filters.action
       );
     }
 
     // User filter
     if (filters.userId) {
       filtered = filtered.filter(activity => 
-        activity.user_id?.includes(filters.userId)
+        activity.user_id.includes(filters.userId) ||
+        (activity.actor_email && activity.actor_email.includes(filters.userId))
       );
     }
 
@@ -85,8 +96,9 @@ const Reports: React.FC = () => {
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
       filtered = filtered.filter(activity => 
-        activity.description.toLowerCase().includes(searchLower) ||
-        activity.action.toLowerCase().includes(searchLower)
+        activity.event_type.toLowerCase().includes(searchLower) ||
+        (activity.actor_email && activity.actor_email.toLowerCase().includes(searchLower)) ||
+        formatActivityMessage(activity).toLowerCase().includes(searchLower)
       );
     }
 
@@ -100,61 +112,95 @@ const Reports: React.FC = () => {
   // Calculate stats
   const uniqueUsers = new Set(activities.map(a => a.user_id)).size;
   const todayActivities = activities.filter(a =>
-    new Date(a.timestamp).toDateString() === new Date().toDateString()
+    new Date(a.occurred_at).toDateString() === new Date().toDateString()
   ).length;
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-300 rounded w-1/4 mb-6"></div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="bg-white rounded-xl p-6">
+                  <div className="h-4 bg-gray-300 rounded w-1/2 mb-4"></div>
+                  <div className="h-8 bg-gray-300 rounded w-1/3"></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 pt-16">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Activity Reports</h1>
-          <p className="text-gray-600">
-            Monitor and analyze system activities and user interactions
-          </p>
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">Activity Reports</h1>
+          <p className="text-gray-600">Track and analyze user activities across your platform</p>
         </motion.div>
 
         {/* Stats Cards */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"
-        >
-          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="bg-white rounded-xl shadow-lg p-6"
+          >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-600 text-sm">Total Activities</p>
+                <p className="text-gray-600 text-sm font-medium">Total Activities</p>
                 <p className="text-3xl font-bold text-gray-900">{activities.length}</p>
               </div>
-              <Activity className="w-8 h-8 text-blue-600" />
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm">Today's Activities</p>
-                <p className="text-3xl font-bold text-gray-900">{todayActivities}</p>
+              <div className="bg-blue-100 p-3 rounded-lg">
+                <Activity className="w-6 h-6 text-blue-600" />
               </div>
-              <TrendingUp className="w-8 h-8 text-green-600" />
             </div>
-          </div>
-          
-          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="bg-white rounded-xl shadow-lg p-6"
+          >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-600 text-sm">Active Users</p>
+                <p className="text-gray-600 text-sm font-medium">Active Users</p>
                 <p className="text-3xl font-bold text-gray-900">{uniqueUsers}</p>
               </div>
-              <Users className="w-8 h-8 text-purple-600" />
+              <div className="bg-green-100 p-3 rounded-lg">
+                <Users className="w-6 h-6 text-green-600" />
+              </div>
             </div>
-          </div>
-        </motion.div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="bg-white rounded-xl shadow-lg p-6"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 text-sm font-medium">Today's Activities</p>
+                <p className="text-3xl font-bold text-gray-900">{todayActivities}</p>
+              </div>
+              <div className="bg-purple-100 p-3 rounded-lg">
+                <TrendingUp className="w-6 h-6 text-purple-600" />
+              </div>
+            </div>
+          </motion.div>
+        </div>
 
         {/* Filters */}
         <motion.div
@@ -169,7 +215,7 @@ const Reports: React.FC = () => {
               <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
                 type="date"
-                value={filters.dateFrom}
+                value={filters.dateFrom || ""}
                 onChange={(e) => setFilters(prev => ({ ...prev, dateFrom: e.target.value }))}
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
               />
@@ -180,7 +226,7 @@ const Reports: React.FC = () => {
               <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
                 type="date"
-                value={filters.dateTo}
+                value={filters.dateTo || ""}
                 onChange={(e) => setFilters(prev => ({ ...prev, dateTo: e.target.value }))}
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
               />
@@ -209,7 +255,7 @@ const Reports: React.FC = () => {
                 <option value="">All Actions</option>
                 {actionTypes.map(action => (
                   <option key={action} value={action}>
-                    {action.replace('_', ' ').toUpperCase()}
+                    {action.replace(/_/g, ' ').toUpperCase()}
                   </option>
                 ))}
               </select>
@@ -233,12 +279,13 @@ const Reports: React.FC = () => {
             <button
               onClick={() => {
                 const csvContent = [
-                  ['Date', 'User ID', 'Action', 'Description'],
+                  ['Date', 'User ID', 'Event Type', 'Actor Email', 'Metadata'],
                   ...filteredActivities.map(activity => [
-                    new Date(activity.timestamp).toLocaleDateString(),
+                    new Date(activity.occurred_at).toLocaleDateString(),
                     activity.user_id,
-                    activity.action,
-                    activity.description
+                    activity.event_type,
+                    activity.actor_email || '',
+                    JSON.stringify(activity.metadata || {})
                   ])
                 ].map(row => row.join(',')).join('\n');
 
@@ -260,26 +307,6 @@ const Reports: React.FC = () => {
               Showing <span className="font-semibold">{filteredActivities.length}</span> of{' '}
               <span className="font-semibold">{activities.length}</span> activities
             </div>
-            <div className="text-gray-600 text-sm">
-              Last updated: {new Date().toLocaleTimeString()}
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Results Summary */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white/10 backdrop-blur-lg rounded-xl p-4 mb-6 border border-white/20"
-        >
-          <div className="flex items-center justify-between">
-            <div className="text-white">
-              Showing <span className="font-semibold">{filteredActivities.length}</span> of{' '}
-              <span className="font-semibold">{activities.length}</span> activities
-            </div>
-            <div className="text-slate-300 text-sm">
-              Last updated: {new Date().toLocaleTimeString()}
-            </div>
           </div>
         </motion.div>
 
@@ -290,78 +317,72 @@ const Reports: React.FC = () => {
           transition={{ delay: 0.3 }}
           className="bg-white rounded-xl shadow-lg overflow-hidden"
         >
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Timestamp
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      User ID
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Action
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Description
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Project ID
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredActivities.map((activity, index) => (
-                    <motion.tr
-                      key={activity.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      className="hover:bg-gray-50 transition-colors"
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(activity.timestamp).toLocaleString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {activity.user_id}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          activity.action === 'login' ? 'bg-green-100 text-green-800' :
-                          activity.action === 'logout' ? 'bg-red-100 text-red-800' :
-                          activity.action === 'project_created' ? 'bg-blue-100 text-blue-800' :
-                          activity.action === 'project_updated' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {activity.action.replace('_', ' ').toUpperCase()}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {activity.description}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {activity.project_id || 'N/A'}
-                      </td>
-                    </motion.tr>
-                  ))}
-                </tbody>
-              </table>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Date & Time
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    User
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Event Type
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Description
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredActivities.map((activity, index) => (
+                  <motion.tr
+                    key={activity.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    className="hover:bg-gray-50 transition-colors"
+                  >
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {new Date(activity.occurred_at || activity.timestamp || new Date()).toLocaleString('ar-SA', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit'
+                      })}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {activity.actor_email || 
+                         (activity.user_id ? (
+                           <UserNameDisplay userId={activity.user_id} />
+                         ) : 'Unknown User')}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                        {activity.event_type.replace(/_/g, ' ').toUpperCase()}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      {formatActivityMessage(activity)}
+                    </td>
+                  </motion.tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-              {filteredActivities.length === 0 && !loading && (
-                <div className="text-center py-12">
-                  <Activity className="mx-auto h-12 w-12 text-gray-400" />
-                  <h3 className="mt-2 text-sm font-medium text-gray-900">No activities found</h3>
-                  <p className="mt-1 text-sm text-gray-500">
-                    Try adjusting your filters to see more results.
-                  </p>
-                </div>
-              )}
+          {filteredActivities.length === 0 && (
+            <div className="text-center py-12">
+              <Activity className="mx-auto h-12 w-12 text-gray-400" />
+              <h3 className="mt-2 text-sm font-medium text-gray-900">No activities found</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                Try adjusting your filters to see more results.
+              </p>
             </div>
           )}
         </motion.div>

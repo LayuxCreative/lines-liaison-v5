@@ -1,5 +1,5 @@
 // Common Types
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   data?: T;
   error?: string;
   message?: string;
@@ -37,12 +37,12 @@ export interface FormField {
     min?: number;
     max?: number;
     pattern?: string;
-    custom?: (value: any) => boolean | string;
+    custom?: (value: unknown) => boolean | string;
   };
 }
 
 export interface FormState {
-  values: Record<string, any>;
+  values: Record<string, unknown>;
   errors: Record<string, string>;
   touched: Record<string, boolean>;
   isSubmitting: boolean;
@@ -129,18 +129,18 @@ export interface ThemeConfig {
 // Search Types
 export interface SearchParams {
   query: string;
-  filters?: Record<string, any>;
+  filters?: Record<string, unknown>;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
   page?: number;
   limit?: number;
 }
 
-export interface SearchResult<T = any> {
+export interface SearchResult<T = unknown> {
   items: T[];
   total: number;
   query: string;
-  filters: Record<string, any>;
+  filters: Record<string, unknown>;
   suggestions?: string[];
 }
 
@@ -148,7 +148,7 @@ export interface SearchResult<T = any> {
 export interface AppError {
   code: string;
   message: string;
-  details?: any;
+  details?: unknown;
   timestamp: string;
   stack?: string;
 }
@@ -167,7 +167,7 @@ export type DeepPartial<T> = {
 };
 
 // Event Types
-export interface CustomEvent<T = any> {
+export interface CustomEvent<T = unknown> {
   type: string;
   payload: T;
   timestamp: number;
@@ -198,7 +198,7 @@ export interface AuditLog {
   action: string;
   resource: string;
   resourceId?: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
   timestamp: string;
   ipAddress?: string;
   userAgent?: string;

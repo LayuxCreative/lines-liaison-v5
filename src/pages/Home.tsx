@@ -1,17 +1,18 @@
 import React from "react";
-import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { useAuth } from "../contexts/AuthContext";
+import { Link } from "react-router-dom";
 import {
   ArrowRight,
-  Building2,
-  Users,
-  Globe,
-  Zap,
-  Shield,
   CheckCircle,
+  Users,
+  Shield,
+  Zap,
+  Building2,
   Play,
+  Globe,
 } from "lucide-react";
+
+import { useAuth } from "../contexts/AuthContext";
 
 const Home: React.FC = () => {
   const { user } = useAuth();

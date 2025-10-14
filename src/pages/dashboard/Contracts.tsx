@@ -41,6 +41,21 @@ const Contracts: React.FC = () => {
   }> = [];
 
   // Remove unused getStatusIcon function
+  // const getStatusIcon = (status: string) => {
+  //   switch (status) {
+  //     case "active":
+  //       return CheckCircle;
+  //     case "completed":
+  //       return FileCheck;
+  //     case "draft":
+  //       return Clock;
+  //     case "terminated":
+  //       return AlertTriangle;
+  //     default:
+  //       return FileText;
+  //   }
+  // };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "active":
@@ -268,7 +283,6 @@ const Contracts: React.FC = () => {
             className="grid grid-cols-1 lg:grid-cols-2 gap-6"
           >
             {filteredContracts.map((contract, index) => {
-              // Remove unused StatusIcon variable
               return (
                 <motion.div
                   key={contract.id}
@@ -403,3 +417,8 @@ const Contracts: React.FC = () => {
 };
 
 export default Contracts;
+
+// Remove unused StatusIcon variable
+// const StatusIcon = status === 'active' ? CheckCircle : 
+//                   status === 'pending' ? Clock : 
+//                   status === 'completed' ? CheckCircle : AlertCircle;

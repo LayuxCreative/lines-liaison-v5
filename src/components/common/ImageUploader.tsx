@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Upload, Image, Camera, Loader2, X, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import UnsplashImagePicker from './UnsplashImagePicker';
-import { imageStorageService, UploadResult } from '../../services/imageStorageService';
+import { imageStorageService, UploadResult } from '../../services/storageService';
 import { UnsplashImage } from '../../services/unsplashService';
 
 interface ImageUploaderProps {

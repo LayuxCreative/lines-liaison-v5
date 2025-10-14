@@ -7,47 +7,30 @@ import {
   Shield
 } from "lucide-react";
 
-
-// Types for settings
-type ProfileVisibility = "public" | "contacts" | "private";
-interface NotificationsSettings { email: boolean; push: boolean; sms: boolean }
-interface PrivacySettings { profileVisibility: ProfileVisibility; showEmail: boolean; showPhone: boolean; allowMessages: boolean }
-interface SettingsModel {
-  theme: string;
-  language: string;
-  timezone: string;
-  notifications: NotificationsSettings;
-  privacy: PrivacySettings;
-  twoFactorAuth: boolean;
-  sessionTimeout: string;
-  loginNotifications: boolean;
-}
-
+import { useNotifications } from "../../hooks/useNotifications";
+import { useAuth } from "../../contexts/AuthContext";
 import UserManagement from "../../components/dashboard/UserManagement";
 import GeneralSettings from "../../components/dashboard/GeneralSettings";
 import SecuritySettings from "../../components/dashboard/SecuritySettings";
+import { safeLocalStorage } from "../../utils/safeStorage";
 
 const Settings: React.FC = () => {
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState(() => {
+  const [activeTab, setActiveTab] = useState("general");
+  const [isClient, setIsClient] = useState(false);
+
+  // Initialize client-side state
+  useEffect(() => {
+    setIsClient(true);
     const urlTab = searchParams.get("tab");
-    const savedTab = localStorage.getItem("settings-active-tab");
-    return urlTab || savedTab || "general";
-  });
+    const savedTab = safeLocalStorage.getItem("settings-active-tab");
+    setActiveTab(urlTab || savedTab || "general");
+  }, [searchParams]);
 
   // Settings state
-  const [settings, setSettings] = useState<SettingsModel>(() => {
-    // Load settings from localStorage or use defaults
-    const savedSettings = localStorage.getItem("userSettings");
-    if (savedSettings) {
-      try {
-        return JSON.parse(savedSettings) as SettingsModel;
-      } catch (error) {
-        console.error("Error parsing saved settings:", error);
-      }
-    }
-
-    // Default settings
+  const [settings, setSettings] = useState(() => {
+    // Default settings - will be updated on client side
     return {
       // General Settings
       theme: "system",
@@ -65,47 +48,56 @@ const Settings: React.FC = () => {
         allowMessages: true,
       },
       // Security Settings
-      twoFactorAuth: false,
-      sessionTimeout: "30m",
+      twoFactorEnabled: false,
+      sessionTimeout: 30,
       loginNotifications: true,
     };
   });
 
+  // Load settings from localStorage on client side
+  useEffect(() => {
+    if (isClient) {
+      const savedSettings = safeLocalStorage.getItem("userSettings");
+      if (savedSettings) {
+        try {
+          setSettings(JSON.parse(savedSettings));
+        } catch (error) {
+          console.error("Error parsing saved settings:", error);
+        }
+      }
+    }
+  }, [isClient]);
+
+  // Users state for user management - removed since UserManagement handles its own state
+  const { addNotification } = useNotifications();
+
+  // Load data on component mount - removed loadUsers and loadPermissionGroups since not needed
+  // UserManagement component handles its own data loading
 
   // Update URL when tab changes
   useEffect(() => {
     setSearchParams({ tab: activeTab });
-    localStorage.setItem("settings-active-tab", activeTab);
-  }, [activeTab, setSearchParams]);
+    if (isClient) {
+      safeLocalStorage.setItem("settings-active-tab", activeTab);
+    }
+  }, [activeTab, setSearchParams, isClient]);
 
-  // Remove unused states/loaders
-  const handleSettingChange = (key: string, value: string | boolean | number) => {
-    setSettings((prev) => {
-      const next: SettingsModel = { ...prev };
-  
-      if (key.includes(".")) {
-        const [group, field] = key.split(".") as ["privacy" | "notifications", string];
-        if (group === "privacy") {
-          next.privacy = {
-            ...prev.privacy,
-            [field]: value as PrivacySettings[keyof PrivacySettings],
-          } as PrivacySettings;
-        } else if (group === "notifications") {
-          next.notifications = {
-            ...prev.notifications,
-            [field]: value as NotificationsSettings[keyof NotificationsSettings],
-          } as NotificationsSettings;
-        }
-      } else if (key in next) {
-        (next as unknown as Record<string, unknown>)[key] = value as SettingsModel[keyof SettingsModel];
-      }
-  
-      localStorage.setItem("userSettings", JSON.stringify(next));
-      return next;
+  const handleSettingChange = (key: string, value: unknown) => {
+    setSettings(prev => ({ ...prev, [key]: value }));
+    
+    // Save to localStorage
+    localStorage.setItem(`setting_${key}`, JSON.stringify(value));
+    
+    addNotification({
+      title: 'تم الحفظ',
+      message: 'تم حفظ الإعدادات بنجاح',
+      type: 'success',
+      userId: user?.id || ''
     });
   };
 
-  // Correct effects
+
+
   const tabs = [
     {
       id: "general",
@@ -168,8 +160,8 @@ const Settings: React.FC = () => {
           <SecuritySettings 
             settings={settings}
             onSettingChange={handleSettingChange}
-            onPasswordChange={async (currentPassword: string, newPassword: string) => {
-              console.log('Password change requested', { currentPassword, newPassword });
+            onPasswordChange={async () => {
+              console.log('Password change requested');
             }}
           />
         );

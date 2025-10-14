@@ -2,10 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   Permission,
   UserPermissions,
-  PermissionCategory,
-  PermissionLevel,
   PermissionAction,
-  PermissionRestriction,
   User,
 } from "../../types";
 
@@ -20,17 +17,11 @@ interface PermissionState {
 interface PermissionManagerProps {
   currentUser: User;
   users: User[];
-  onPermissionUpdate?: (userId: string, permissions: UserPermissions) => void;
-  onPermissionCreate?: (permission: Omit<Permission, "id">) => void;
-  onPermissionDelete?: (permissionId: string) => void;
 }
 
 export const PermissionManager: React.FC<PermissionManagerProps> = ({
   currentUser,
   users,
-  onPermissionUpdate,
-  onPermissionCreate,
-  onPermissionDelete,
 }) => {
   const [state, setState] = useState<PermissionState>({
     permissions: [],
@@ -39,14 +30,9 @@ export const PermissionManager: React.FC<PermissionManagerProps> = ({
     error: null,
   });
 
-  const [selectedUser, setSelectedUser] = useState<string>("");
   const [activeTab, setActiveTab] = useState<
     "overview" | "users" | "roles" | "restrictions"
   >("overview");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterCategory, setFilterCategory] = useState<
-    PermissionCategory | "all"
-  >("all");
 
   // Initialize with empty data - permissions should come from Supabase
   useEffect(() => {
@@ -75,176 +61,13 @@ export const PermissionManager: React.FC<PermissionManagerProps> = ({
     [state.userPermissions],
   );
 
-  const getPermissionLevel = useCallback(
-    (userId: string, resource: string): PermissionLevel => {
-      const userPerms = state.userPermissions[userId];
-      if (!userPerms) return "none";
 
-      const allPermissions = [
-        ...userPerms.rolePermissions,
-        ...userPerms.customPermissions,
-      ];
-      const resourcePermissions = allPermissions.filter(
-        (perm) => perm.resource === resource,
-      );
 
-      if (resourcePermissions.some((p) => p.level === "admin")) return "admin";
-      if (resourcePermissions.some((p) => p.level === "write")) return "write";
-      if (resourcePermissions.some((p) => p.level === "read")) return "read";
 
-      return "none";
-    },
-    [state.userPermissions],
-  );
 
-  const updateUserPermissions = useCallback(
-    (userId: string, updates: Partial<UserPermissions>) => {
-      setState((prev) => ({
-        ...prev,
-        userPermissions: {
-          ...prev.userPermissions,
-          [userId]: {
-            ...prev.userPermissions[userId],
-            ...updates,
-            updatedAt: new Date(),
-          },
-        },
-      }));
 
-      if (onPermissionUpdate) {
-        onPermissionUpdate(userId, {
-          ...state.userPermissions[userId],
-          ...updates,
-          updatedAt: new Date(),
-        });
-      }
-    },
-    [state.userPermissions, onPermissionUpdate],
-  );
 
-  const addPermissionToUser = useCallback(
-    (userId: string, permission: Permission) => {
-      const userPerms = state.userPermissions[userId];
-      if (!userPerms) return;
 
-      const updatedCustomPermissions = [
-        ...userPerms.customPermissions,
-        permission,
-      ];
-      updateUserPermissions(userId, {
-        customPermissions: updatedCustomPermissions,
-      });
-    },
-    [state.userPermissions, updateUserPermissions],
-  );
-
-  const removePermissionFromUser = useCallback(
-    (userId: string, permissionId: string) => {
-      const userPerms = state.userPermissions[userId];
-      if (!userPerms) return;
-
-      const updatedCustomPermissions = userPerms.customPermissions.filter(
-        (p) => p.id !== permissionId,
-      );
-      updateUserPermissions(userId, {
-        customPermissions: updatedCustomPermissions,
-      });
-    },
-    [state.userPermissions, updateUserPermissions],
-  );
-
-  const getFilteredPermissions = useCallback(() => {
-    let filtered = state.permissions;
-
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (perm) =>
-          perm.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          perm.description.toLowerCase().includes(searchTerm.toLowerCase()),
-      );
-    }
-
-    if (filterCategory !== "all") {
-      filtered = filtered.filter((perm) => perm.category === filterCategory);
-    }
-
-    return filtered;
-  }, [state.permissions, searchTerm, filterCategory]);
-
-  const getPermissionIcon = (category: PermissionCategory) => {
-    switch (category) {
-      case "dashboard":
-        return (
-          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
-          </svg>
-        );
-      case "projects":
-        return (
-          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-            <path
-              fillRule="evenodd"
-              d="M3 4a1 1 0 011-1h4a1 1 0 010 2H6.414l2.293 2.293a1 1 0 01.293.707V12a1 1 0 102 0V9a1 1 0 01.293-.707L13.586 6H12a1 1 0 010-2h4a1 1 0 011 1v4a1 1 0 01-2 0V7.414l-2.293 2.293A1 1 0 0112 10v2a3 3 0 11-6 0V8a1 1 0 01.293-.707L8.586 5H7a1 1 0 01-1-1z"
-              clipRule="evenodd"
-            />
-          </svg>
-        );
-      case "tasks":
-        return (
-          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-            <path
-              fillRule="evenodd"
-              d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z"
-              clipRule="evenodd"
-            />
-          </svg>
-        );
-      case "files":
-        return (
-          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-            <path
-              fillRule="evenodd"
-              d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
-              clipRule="evenodd"
-            />
-          </svg>
-        );
-      case "financial":
-        return (
-          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
-            <path
-              fillRule="evenodd"
-              d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z"
-              clipRule="evenodd"
-            />
-          </svg>
-        );
-      default:
-        return (
-          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-            <path
-              fillRule="evenodd"
-              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-              clipRule="evenodd"
-            />
-          </svg>
-        );
-    }
-  };
-
-  const getLevelColor = (level: PermissionLevel) => {
-    switch (level) {
-      case "admin":
-        return "bg-red-100 text-red-800";
-      case "write":
-        return "bg-yellow-100 text-yellow-800";
-      case "read":
-        return "bg-green-100 text-green-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
 
   const renderOverviewTab = () => (
     <div className="space-y-6">
@@ -365,7 +188,7 @@ export const PermissionManager: React.FC<PermissionManagerProps> = ({
                     <div className="flex items-center space-x-3">
                       <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
                         <span className="text-sm font-medium text-gray-600">
-                          {user?.name.charAt(0) || "?"}
+                          {user?.name?.charAt(0) || "?"}
                         </span>
                       </div>
                       <div>
@@ -456,7 +279,7 @@ export const PermissionManager: React.FC<PermissionManagerProps> = ({
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id as "overview" | "users" | "roles" | "restrictions")}
               className={`
                 py-2 px-1 border-b-2 font-medium text-sm transition-colors
                 ${

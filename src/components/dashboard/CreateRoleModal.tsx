@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Shield, Users, Settings, FileText, MessageSquare, BarChart3 } from 'lucide-react';
-import { nodeApiService } from '../../services/nodeApiService';
-import { useNotifications } from '../../contexts/NotificationContext';
+import { supabaseService } from '../../services/supabaseService';
+import { useNotifications } from "../../hooks/useNotifications";
 import { useAuth } from '../../contexts/AuthContext';
 import { Role, PermissionItem } from '../../types';
 
@@ -51,7 +51,7 @@ const CreateRoleModal: React.FC<CreateRoleModalProps> = ({ onClose, onRoleCreate
   const loadPermissions = async () => {
     try {
       setIsLoadingPermissions(true);
-      const response = await nodeApiService.getPermissions();
+      const response = await supabaseService.getPermissions();
       if (response.success && response.data) {
         setAvailablePermissions(response.data);
       } else {
@@ -147,7 +147,7 @@ const CreateRoleModal: React.FC<CreateRoleModalProps> = ({ onClose, onRoleCreate
       
       if (editingRole) {
         // Update existing role
-        const updateResponse = await nodeApiService.updateRole(editingRole.id, {
+        const updateResponse = await supabaseService.updateRole(editingRole.id, {
           name: roleData.name,
           display_name: roleData.name,
           description: roleData.description,
@@ -170,7 +170,7 @@ const CreateRoleModal: React.FC<CreateRoleModalProps> = ({ onClose, onRoleCreate
         });
       } else {
         // Create new role
-        const createResponse = await nodeApiService.createRole({
+        const createResponse = await supabaseService.createRole({
           name: roleData.name,
           display_name: roleData.name,
           description: roleData.description,

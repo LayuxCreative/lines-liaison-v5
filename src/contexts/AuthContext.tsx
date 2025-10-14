@@ -1,22 +1,25 @@
-// @refresh reset
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { User, UserStatusType } from "../types";
-import { nodeApiService } from "../services/nodeApiService";
-import { supabase } from "../services/supabaseClient";
+import { supabase, sessionManager } from "../lib/supabase";
+import { safeLocalStorage } from "../utils/safeStorage";
+
+
+
+interface UserRegistrationData {
+  full_name: string;
+  company?: string;
+  department?: string;
+  position?: string;
+  phone?: string;
+  role?: "admin" | "project_manager" | "team_member" | "client";
+}
 
 interface AuthContextType {
   user: User | null;
-  login: (
-    email: string,
-    password: string,
-  ) => Promise<{ success: boolean; error?: string }>;
-  register: (
-    email: string,
-    password: string,
-    fullName: string,
-  ) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string; requiresTwoFactor?: boolean }>;
+  register: (email: string, password: string, userData: UserRegistrationData) => Promise<{ success: boolean; user?: User; error?: string }>;
   logout: () => Promise<void>;
-  updateUserStatus: (status: UserStatusType) => void;
+  updateUserStatus: (status: UserStatusType) => Promise<void>;
   updateUserProfile: (updates: Partial<User>) => Promise<void>;
   refreshUserProfile: () => Promise<void>;
   isLoading: boolean;
@@ -24,344 +27,477 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ 
-  children: React.ReactNode;
-}> = ({
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
-
-
-  // Initialize auth state
   useEffect(() => {
-    console.log('AuthProvider useEffect - initializing auth state');
-    let isMounted = true;
-    setIsLoading(true);
-
-    // Prevent duplicate initialization in React StrictMode during development
-    if (import.meta.env.DEV) {
-      const w = window as unknown as { __authInitDone?: boolean };
-      if (w.__authInitDone) {
-        setIsLoading(false);
-        return;
-      }
-      w.__authInitDone = true;
-    }
-
     const initializeAuth = async () => {
       try {
-        console.log('AuthContext: Initializing auth...');
-        const currentUser = await nodeApiService.getCurrentUser();
-        console.log('AuthContext: getCurrentUser result:', currentUser);
-        if (currentUser && isMounted) {
-          console.log('AuthContext: Setting user:', currentUser);
-          setUser(currentUser);
+        console.log('AuthContext: Initializing authentication...');
+        
+        // Get current session from Supabase
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user) {
+          console.log('AuthContext: Found active session:', session.user.email);
+          console.log('🔍 AuthContext: Session user ID:', session.user.id);
+          console.log('🔍 AuthContext: Session user metadata:', session.user.user_metadata);
+          
+          // Fetch user profile from database
+          const { data: userProfile, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+          
+          console.log('🔍 AuthContext: Profile query result:', { userProfile, error });
+          
+          if (userProfile && !error) {
+            console.log('🔍 AuthContext: Setting user profile:', {
+              id: userProfile.id,
+              email: userProfile.email,
+              full_name: userProfile.full_name,
+              role: userProfile.role
+            });
+            setUser(userProfile);
+            safeLocalStorage.setItem('user', JSON.stringify(userProfile));
+            console.log('AuthContext: User profile loaded successfully');
+          } else {
+            console.error('AuthContext: Error fetching user profile:', error);
+          }
         } else {
-          console.log('AuthContext: No current user found');
-          setUser(null);
+          console.log('AuthContext: No active session found');
+          safeLocalStorage.removeItem('user');
         }
       } catch (error) {
-        console.error("AuthContext: Initialization error:", error);
-        if (isMounted) {
-          setUser(null);
-        }
-      } finally {
-        if (isMounted) {
-          console.log('AuthContext: Setting loading to false');
-          setIsLoading(false);
-        }
+        console.error('AuthContext: Initialization error:', error);
+        safeLocalStorage.removeItem('user');
       }
     };
-
-    // Add timeout to prevent infinite loading
-    const timeoutId = setTimeout(() => {
-      console.log('AuthContext: Timeout reached, setting loading to false');
-      setIsLoading(false);
-    }, 10000);
 
     initializeAuth();
 
-    // Auth state changes are now handled by the Node.js API
-    // No need for Supabase auth state listeners
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('AuthContext: Auth state changed:', event);
+      console.log('🔍 AuthContext: Auth state change session:', session?.user?.email, session?.user?.id);
+      
+      if (session?.user) {
+        // Fetch user profile
+        const { data: userProfile, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+        
+        console.log('🔍 AuthContext: Auth state change profile query:', { userProfile, error });
+        
+        if (userProfile && !error) {
+          console.log('🔍 AuthContext: Auth state change setting user:', {
+            id: userProfile.id,
+            email: userProfile.email,
+            full_name: userProfile.full_name,
+            role: userProfile.role
+          });
+          setUser(userProfile);
+          safeLocalStorage.setItem('user', JSON.stringify(userProfile));
+        }
+      } else {
+        setUser(null);
+        safeLocalStorage.removeItem('user');
+      }
+    });
 
-    // Realtime monitoring removed to prevent connection errors
-
-    return () => {
-      isMounted = false;
-      clearTimeout(timeoutId);
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
-
-
-  const login = async (
-    email: string,
-    password: string,
-  ): Promise<{ success: boolean; error?: string }> => {
+  const login = async (email: string, password: string) => {
     try {
       setIsLoading(true);
-      console.log("AuthContext: Attempting login for:", email);
-      
-      const result = await nodeApiService.signIn(email, password);
+      console.log('🔍 AuthContext: Attempting login for:', email);
 
-      if (result.error) {
-        console.error("AuthContext: Login error:", result.error);
-        setIsLoading(false);
-        return { success: false, error: result.error };
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      
+      console.log('🔍 AuthContext: Login response received', { 
+        hasData: !!data, 
+        hasUser: !!data?.user, 
+        hasError: !!error,
+        errorMessage: error?.message 
+      });
+      
+      if (error) {
+        console.error('❌ AuthContext: Login failed:', error.message);
+        
+        // Handle specific error cases
+        if (error.message.includes('Email not confirmed')) {
+          return { 
+            success: false, 
+            error: 'Please confirm your email before logging in. Check your inbox.' 
+          };
+        }
+        
+        if (error.message.includes('Invalid login credentials')) {
+          return { 
+            success: false, 
+            error: 'Invalid login credentials. Please check your email and password.' 
+          };
+        }
+        
+        return { success: false, error: error.message };
       }
 
-      if (result.data?.user) {
-        console.log("AuthContext: Login successful for:", result.data.user.email);
-        setUser(result.data.user);
+      if (data.user) {
+        console.log('✅ AuthContext: Login successful, user ID:', data.user.id);
         
-        // Log successful login
-        console.log('User logged in:', result.data.user.id);
+        // Fetch user profile immediately after successful login
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
         
-        setIsLoading(false);
+        if (profileError) {
+          console.error('❌ AuthContext: Failed to fetch user profile:', profileError.message);
+          
+          // Check if it's an RLS policy issue (user might not have a profile yet)
+          if (profileError.code === 'PGRST116' || profileError.message?.includes('RLS')) {
+            console.log('🔍 AuthContext: RLS policy issue, creating basic user profile');
+            
+            // If profile fetching fails (e.g., due to RLS policies), create a basic profile
+            const basicProfile: User = {
+              id: data.user.id,
+              email: data.user.email || '',
+              full_name: data.user.user_metadata?.full_name || data.user.email?.split('@')[0] || 'User',
+              role: 'team_member',
+              status: 'available' as UserStatusType,
+              created_at: new Date(),
+              updated_at: new Date()
+            };
+            
+            setUser(basicProfile);
+            safeLocalStorage.setItem('user', JSON.stringify(basicProfile));
+            return { success: true };
+          }
+          
+          return { success: false, error: 'Failed to load user profile' };
+        }
+        
+        if (profileData) {
+          console.log('✅ AuthContext: User profile loaded:', profileData.email);
+          setUser(profileData);
+          safeLocalStorage.setItem('user', JSON.stringify(profileData));
+        }
+        
         return { success: true };
       }
 
-      setIsLoading(false);
-      return { success: false, error: 'Login failed' };
+      console.error('❌ AuthContext: No user data received');
+      return { success: false, error: 'Login failed - no user data' };
     } catch (error) {
-      console.error("AuthContext: Unexpected login error:", error);
+      console.error('❌ AuthContext: Unexpected login error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Login failed';
+      return { success: false, error: errorMessage };
+    } finally {
+      console.log('🔍 AuthContext: Setting isLoading to false');
       setIsLoading(false);
-      
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      if (errorMessage.includes('fetch') || errorMessage.includes('network')) {
-        return { success: false, error: "Database connection error. Please try again later." };
-      }
-      
-      return { success: false, error: "Unexpected login error" };
     }
   };
 
-  const register = async (
-    email: string,
-    password: string,
-    fullName: string,
-  ): Promise<{ success: boolean; error?: string }> => {
+  const register = async (email: string, password: string, userData: UserRegistrationData) => {
     try {
       setIsLoading(true);
-      console.log("AuthContext: Attempting registration for:", email);
+      console.log('AuthContext: Attempting registration...');
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
       
-      const result = await nodeApiService.signUp(email, password, { full_name: fullName });
-
-      if (result.error) {
-        console.error("AuthContext: Registration error:", result.error);
-        setIsLoading(false);
-        return { success: false, error: result.error };
+      if (error) {
+        console.error('AuthContext: Registration failed:', error.message);
+        return { success: false, error: error.message };
       }
 
-      if (result.data?.user) {
-        console.log("AuthContext: Registration successful for:", result.data.user.email);
-        setUser(result.data.user);
-        
-        // Log successful registration
-        console.log('User registered:', result.data.user.id);
-        
-        setIsLoading(false);
-        return { success: true };
+      if (data.user) {
+        // Create user profile in database
+        const { data: userProfile, error: profileError } = await supabase
+          .from('profiles')
+          .insert([{
+            id: data.user.id,
+            email: data.user.email,
+            full_name: userData.full_name,
+            company: userData.company,
+            department: userData.department,
+            position: userData.position,
+            phone: userData.phone,
+            role: userData.role || 'team_member',
+            status: 'active',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }])
+          .select()
+          .single();
+
+        if (profileError) {
+          console.error('AuthContext: Error creating user profile:', profileError);
+          return { success: false, error: 'Failed to create user profile' };
+        }
+
+        console.log('AuthContext: Registration successful');
+        return { success: true, user: userProfile };
       }
 
-      setIsLoading(false);
       return { success: false, error: 'Registration failed' };
-    } catch (error: unknown) {
-      console.error("AuthContext: Unexpected registration error:", error);
-      setIsLoading(false);
-      
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      if (errorMessage.includes('fetch') || errorMessage.includes('network')) {
-        return { success: false, error: "Network connection error. Please check your internet connection." };
-      }
-      
-      return { success: false, error: "Unexpected registration error" };
-    }
-  };
-
-  const logout = async (): Promise<void> => {
-    try {
-      console.log('AuthContext: Attempting logout');
-      setIsLoading(true);
-      
-      const result = await nodeApiService.signOut();
-
-      if (result.error) {
-        console.error('AuthContext: Logout error:', result.error);
-        throw new Error(result.error);
-      }
-
-      console.log('AuthContext: Logout successful');
-      
-      // Log logout before clearing user data
-      if (user) {
-        console.log('User logged out:', user.id);
-      }
-      
-      // Clear user state immediately
-      setUser(null);
-      
-      // Clear any cached data
-      if (window.localStorage) {
-        const keysToRemove = Object.keys(localStorage).filter(key => 
-          key.includes('auth')
-        );
-        keysToRemove.forEach(key => localStorage.removeItem(key));
-      }
-      
-      // console.log("Logout completed successfully");
     } catch (error) {
-      console.error("Logout error:", error);
-      
-      // Ensure cleanup happens regardless of errors
-      setUser(null);
-      
-      throw error;
+      console.error('AuthContext: Registration error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Registration failed';
+      return { success: false, error: errorMessage };
+    } finally {
+      setIsLoading(false);
     }
   };
+
+  // Enhanced logout function with proper session cleanup
+  const logout = async () => {
+    try {
+      setIsLoading(true)
+      
+      // Use the enhanced session manager for complete cleanup
+      await sessionManager.clearSession()
+      
+      // Clear user state
+      setUser(null)
+      
+      // Clear any user data from safe storage
+      safeLocalStorage.removeItem('user')
+      safeLocalStorage.removeItem('userProfile')
+      
+      // Force reload to clear any cached data
+      window.location.reload()
+    } catch (error) {
+      console.error('Logout error:', error)
+      // Even if logout fails, clear local state
+      setUser(null)
+      safeLocalStorage.removeItem('user')
+      safeLocalStorage.removeItem('userProfile')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Enhanced session check with validation
+  const checkSession = async () => {
+    try {
+      setIsLoading(true)
+      
+      // Use enhanced session manager
+      const session = await sessionManager.getCurrentSession()
+      
+      if (session?.user) {
+        // Convert Supabase User to our User type
+        const userProfile: User = {
+          id: session.user.id,
+          email: session.user.email || '',
+          full_name: session.user.user_metadata?.full_name || session.user.email || '',
+          role: session.user.user_metadata?.role || 'team_member',
+          avatar_url: session.user.user_metadata?.avatar_url,
+          company: session.user.user_metadata?.company,
+          department: session.user.user_metadata?.department,
+          position: session.user.user_metadata?.position,
+          phone: session.user.user_metadata?.phone,
+          status: 'available',
+          created_at: new Date(session.user.created_at)
+        }
+        setUser(userProfile)
+        safeLocalStorage.setItem('user', JSON.stringify(userProfile))
+      } else {
+        setUser(null)
+        safeLocalStorage.removeItem('user')
+      }
+    } catch (error) {
+      console.error('Session check error:', error)
+      setUser(null)
+      safeLocalStorage.removeItem('user')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    // Initial session check
+    checkSession()
+
+    // Enhanced auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth state changed:', event, session?.user?.email)
+        
+        if (event === 'SIGNED_IN' && session?.user) {
+          const userProfile: User = {
+            id: session.user.id,
+            email: session.user.email || '',
+            full_name: session.user.user_metadata?.full_name || session.user.email || '',
+            role: session.user.user_metadata?.role || 'team_member',
+            avatar_url: session.user.user_metadata?.avatar_url,
+            company: session.user.user_metadata?.company,
+            department: session.user.user_metadata?.department,
+            position: session.user.user_metadata?.position,
+            phone: session.user.user_metadata?.phone,
+            status: 'available',
+            created_at: new Date(session.user.created_at)
+          }
+          setUser(userProfile)
+          safeLocalStorage.setItem('user', JSON.stringify(userProfile))
+        } else if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED' && !session) {
+          setUser(null)
+          safeLocalStorage.removeItem('user')
+          safeLocalStorage.removeItem('userProfile')
+        } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+          const userProfile: User = {
+            id: session.user.id,
+            email: session.user.email || '',
+            full_name: session.user.user_metadata?.full_name || session.user.email || '',
+            role: session.user.user_metadata?.role || 'team_member',
+            avatar_url: session.user.user_metadata?.avatar_url,
+            company: session.user.user_metadata?.company,
+            department: session.user.user_metadata?.department,
+            position: session.user.user_metadata?.position,
+            phone: session.user.user_metadata?.phone,
+            status: 'available',
+            created_at: new Date(session.user.created_at)
+          }
+          setUser(userProfile)
+          safeLocalStorage.setItem('user', JSON.stringify(userProfile))
+        }
+        
+        setIsLoading(false)
+      }
+    )
+
+    // Periodic session validation (every 5 minutes)
+    const sessionCheckInterval = setInterval(async () => {
+      const session = await sessionManager.getCurrentSession()
+      if (!session && user) {
+        console.warn('Session expired, logging out user')
+        await logout()
+      }
+    }, 5 * 60 * 1000) // 5 minutes
+
+    return () => {
+      subscription.unsubscribe()
+      clearInterval(sessionCheckInterval)
+    }
+  }, [])
 
   const updateUserStatus = async (status: UserStatusType) => {
+    console.log('🔄 updateUserStatus called with status:', status);
     if (user) {
       try {
+        console.log('📤 Updating status in database for user:', user.id);
         const { error } = await supabase
-          .from("profiles")
-          .update({ status })
-          .eq("id", user.id);
+          .from('profiles')
+          .update({ status, updated_at: new Date().toISOString() })
+          .eq('id', user.id);
 
         if (error) {
-          console.error("Error updating user status:", error);
+          console.error("❌ Error updating user status:", error);
           return;
         }
 
-        const updatedUser = { ...user, status };
-        setUser(updatedUser);
+        console.log('✅ Status updated successfully in database');
+        setUser({ ...user, status });
+        safeLocalStorage.setItem('user', JSON.stringify({ ...user, status }));
+        console.log('✅ Local state and storage updated');
       } catch (error) {
-        console.error("Error updating user status:", error);
+        console.error("❌ Error updating user status:", error);
       }
+    } else {
+      console.log('❌ No user found, cannot update status');
     }
   };
 
   const updateUserProfile = async (updates: Partial<User>) => {
     if (user) {
       try {
-        // Get original user data for comparison
-        const originalUser = user;
-        
-        // Update in database
-        const { error } = await supabase
-          .from("profiles")
-          .update(updates)
-          .eq("id", user.id);
+        const { data, error } = await supabase
+          .from('profiles')
+          .update({ ...updates, updated_at: new Date().toISOString() })
+          .eq('id', user.id)
+          .select()
+          .single();
 
         if (error) {
           console.error("Error updating user profile:", error);
-          throw error;
+          return;
         }
 
-        // Update local state
-        const updatedUser = { ...user, ...updates };
-        setUser(updatedUser);
-
-        // Log profile update activity with details of what changed
-        try {
-          const changedFields: string[] = [];
-          const changeDetails: Record<string, { from: unknown; to: unknown }> = {};
-
-          Object.keys(updates).forEach(key => {
-            const typedKey = key as keyof User;
-            if (originalUser[typedKey] !== updates[typedKey]) {
-              changedFields.push(key);
-              changeDetails[key] = {
-                from: originalUser[typedKey],
-                to: updates[typedKey]
-              };
-            }
-          });
-
-          if (changedFields.length > 0) {
-            await supabase.from('activities').insert({
-              user_id: user.id,
-              type: 'profile_update',
-              description: `${user.name} updated profile: ${changedFields.join(', ')}`,
-              metadata: {
-                user_name: user.name,
-                user_email: user.email,
-                changed_fields: changedFields,
-                changes: changeDetails,
-                timestamp: new Date().toISOString()
-              }
-            });
-          }
-        } catch (activityError) {
-          console.warn('Failed to log profile update activity:', activityError);
-        }
+        setUser(data);
+        safeLocalStorage.setItem('user', JSON.stringify(data));
       } catch (error) {
         console.error("Error updating user profile:", error);
-        throw error;
       }
     }
   };
 
-  const refreshUserProfile = async (): Promise<void> => {
-    if (!user) return;
+  const refreshUserProfile = async () => {
+    if (user) {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
 
-    try {
-      const { data: profileData, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
+        if (error) {
+          console.error("Error refreshing user profile:", error);
+          return;
+        }
 
-      if (error) {
-        console.warn('Failed to refresh profile:', error);
-        return;
+        setUser(data);
+        safeLocalStorage.setItem('user', JSON.stringify(data));
+      } catch (error) {
+        console.error("Error refreshing user profile:", error);
       }
-
-      if (profileData) {
-        const updatedUser = {
-          ...user,
-          name: profileData.full_name || user.name,
-          full_name: profileData.full_name || user.full_name,
-          role: profileData.role || user.role,
-          avatar: profileData.avatar_url || user.avatar, // Map avatar_url to avatar for header components
-          avatar_url: profileData.avatar_url || user.avatar_url,
-          company: profileData.company || '',
-          department: profileData.department || '',
-          position: profileData.position || '',
-          phone: profileData.phone || '',
-          updated_at: profileData.updated_at ? new Date(profileData.updated_at) : user.updated_at,
-        };
-        setUser(updatedUser);
-      }
-    } catch (error) {
-      console.error('Error refreshing profile:', error);
     }
   };
 
-  return (
-    <AuthContext.Provider
-      value={{
-      user,
-      login,
-      register,
-      logout,
-      updateUserStatus,
-      updateUserProfile,
-      refreshUserProfile,
-      isLoading,
-    }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
+  // Debug function to clear all auth data
+  const clearAuthData = () => {
+    console.log('🔍 AuthContext: Clearing all auth data for debugging');
+    setUser(null);
+    safeLocalStorage.removeItem('user');
+    supabase.auth.signOut();
+  };
+
+  // Add to window for debugging
+  if (typeof window !== 'undefined') {
+    (window as typeof window & { clearAuthData: () => void }).clearAuthData = clearAuthData;
+  }
+
+  const value: AuthContextType = {
+    user,
+    login,
+    register,
+    logout,
+    updateUserStatus,
+    updateUserProfile,
+    refreshUserProfile,
+    isLoading,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
-export function useAuth() {
+export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
+  if (context === undefined) {
     throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
-}
+};

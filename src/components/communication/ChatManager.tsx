@@ -13,7 +13,7 @@ import {
   Bell,
   BellOff,
 } from "lucide-react";
-import { SocketService } from "../../services/communication/SocketService";
+import SocketService from "../../services/chat/SocketService";
 import { activityLogger } from "../../utils/activityLogger";
 
 export interface ChatMessage {

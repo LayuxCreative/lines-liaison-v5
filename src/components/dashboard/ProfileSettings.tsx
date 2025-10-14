@@ -10,7 +10,7 @@ import {
   Monitor,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
-import { useNotifications } from "../../contexts/NotificationContext";
+import { useNotifications } from "../../hooks/useNotifications";
 
 interface ProfileSettingsProps {
   settings: {

@@ -1,5 +1,4 @@
 // Media Components - Image, video, and file handling
-import React from 'react';
 
 // Image Component Types
 export interface ImageProps {

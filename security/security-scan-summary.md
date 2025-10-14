@@ -1,32 +1,32 @@
-# تقرير فحص الأمان - OWASP ZAP Baseline
+# Security Scan Report - OWASP ZAP Baseline
 
-## معلومات الفحص
-- **التاريخ**: 29 سبتمبر 2025
-- **الهدف**: http://host.docker.internal:5173
-- **أداة الفحص**: OWASP ZAP 2.16.1
-- **نوع الفحص**: Baseline Security Scan
+## Scan Information
+- **Date**: September 29, 2025
+- **Target**: http://host.docker.internal:5173
+- **Scan Tool**: OWASP ZAP 2.16.1
+- **Scan Type**: Baseline Security Scan
 
-## نتائج الفحص
+## Scan Results
 
-### ملخص النتائج
-- **إجمالي التحذيرات**: 1
-- **مستوى المخاطر**: معلوماتي (منخفض)
-- **الثغرات الحرجة**: 0
-- **الثغرات العالية**: 0
-- **الثغرات المتوسطة**: 0
+### Summary Results
+- **Total Warnings**: 1
+- **Risk Level**: Informational (Low)
+- **Critical Vulnerabilities**: 0
+- **High Vulnerabilities**: 0
+- **Medium Vulnerabilities**: 0
 
-### التحذيرات المكتشفة
+### Discovered Warnings
 
-#### 1. Non-Storable Content (محتوى غير قابل للتخزين)
-- **معرف المكون الإضافي**: 10049
-- **مستوى المخاطر**: معلوماتي (متوسط الثقة)
-- **الوصف**: المحتوى غير قابل للتخزين بواسطة مكونات التخزين المؤقت مثل خوادم البروكسي
-- **المواقع المتأثرة**:
+#### 1. Non-Storable Content
+- **Plugin ID**: 10049
+- **Risk Level**: Informational (Medium Confidence)
+- **Description**: Content cannot be stored by cache components such as proxy servers
+- **Affected Locations**:
   - `http://host.docker.internal:5173` (403 Forbidden)
   - `http://host.docker.internal:5173/robots.txt` (403 Forbidden)
   - `http://host.docker.internal:5173/sitemap.xml` (403 Forbidden)
 
-### الاختبارات التي تم اجتيازها (66 اختبار)
+### Passed Tests (66 tests)
 - ✅ Cross-Site Scripting (XSS)
 - ✅ SQL Injection
 - ✅ Path Traversal
@@ -38,23 +38,23 @@
 - ✅ HTTP Security Headers
 - ✅ Information Disclosure
 - ✅ Authentication & Session Management
-- ✅ وغيرها من الاختبارات الأمنية الأساسية
+- ✅ and other basic security tests
 
-## التوصيات
+## Recommendations
 
-### للتحذير الحالي:
-1. **تحسين التخزين المؤقت**: تكوين headers مناسبة للتخزين المؤقت لتحسين الأداء
-2. **معالجة رموز الحالة 403**: التأكد من أن الملفات المطلوبة متاحة أو إعادة توجيه مناسبة
+### For Current Warning:
+1. **Cache Optimization**: Configure appropriate cache headers to improve performance
+2. **403 Status Code Handling**: Ensure required files are available or provide proper redirects
 
-### توصيات عامة:
-1. **فحص دوري**: تشغيل فحوصات أمنية منتظمة
-2. **مراقبة مستمرة**: تطبيق أدوات مراقبة أمنية في بيئة الإنتاج
-3. **تحديث الاعتمادات**: الحفاظ على تحديث جميع المكتبات والإطارات
+### General Recommendations:
+1. **Regular Scanning**: Run periodic security scans
+2. **Continuous Monitoring**: Implement security monitoring tools in production environment
+3. **Dependency Updates**: Keep all libraries and frameworks updated
 
-## الملفات المُنتجة
-- `zap_baseline_report.html` - تقرير HTML مفصل
-- `zap_baseline_report.json` - تقرير JSON للمعالجة الآلية
-- `security-scan-summary.md` - هذا الملخص
+## Generated Files
+- `zap_baseline_report.html` - Detailed HTML report
+- `zap_baseline_report.json` - JSON report for automated processing
+- `security-scan-summary.md` - This summary
 
-## الخلاصة
-التطبيق يظهر مستوى أمان جيد مع عدم وجود ثغرات حرجة أو عالية المخاطر. التحذير الوحيد متعلق بتحسين الأداء وليس بالأمان المباشر.
+## Conclusion
+The application shows good security level with no critical or high-risk vulnerabilities. The only warning is related to performance optimization rather than direct security concerns.

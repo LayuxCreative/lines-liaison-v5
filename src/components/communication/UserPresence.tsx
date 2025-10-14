@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Users, Clock } from "lucide-react";
+import { useAuth } from "../../contexts/AuthContext";
+import { useUserProfiles } from "../../hooks/useUserProfiles";
 
 interface User {
   id: string;
@@ -7,27 +9,42 @@ interface User {
   email: string;
   avatar?: string;
   status: "online" | "away" | "busy" | "offline";
-  lastSeen?: Date;
+  lastSeen?: Date | undefined;
   isTyping?: boolean;
 }
 
 interface UserPresenceProps {
-  currentUser: User;
-  onlineUsers: User[];
+  currentUser?: User;
+  onlineUsers?: User[];
 }
 
-const UserPresence: React.FC<UserPresenceProps> = ({
-  currentUser,
-}) => {
-  const [users, setUsers] = useState<User[]>([]);
+const UserPresence: React.FC<UserPresenceProps> = () => {
   const [showUserList, setShowUserList] = useState(false);
+  const { user: currentUser } = useAuth();
+  
+  const { 
+    users: profileUsers, 
+    loading, 
+    onlineCount, 
+    totalCount 
+  } = useUserProfiles({
+    excludeCurrentUser: true,
+    currentUserId: currentUser?.id,
+    realtime: true
+  });
 
-  useEffect(() => {
-    // Use onlineUsers for future implementation
-    const onlineUsers: User[] = [];
-    // Use real users data from props
-    setUsers(onlineUsers);
-  }, []);
+  // Transform the data to match our User interface
+  const users: User[] = profileUsers.map(profile => ({
+    id: profile.id,
+    name: profile.full_name || profile.email,
+    email: profile.email,
+    avatar: profile.avatar_url,
+    status: profile.status === 'available' ? 'online' : 
+            profile.status === 'busy' ? 'busy' :
+            profile.status === 'away' ? 'away' : 'offline',
+    lastSeen: profile.last_seen ? new Date(profile.last_seen) : undefined,
+    isTyping: false
+  }));
 
   const getStatusColor = (status: User["status"]) => {
     switch (status) {
@@ -77,8 +94,18 @@ const UserPresence: React.FC<UserPresenceProps> = ({
     }
   };
 
-  const onlineCount = users.filter((user) => user.status === "online").length;
-  const totalCount = users.length;
+
+
+  if (loading) {
+    return (
+      <div className="relative">
+        <div className="flex items-center space-x-2 px-3 py-2 rounded-lg">
+          <Users size={16} className="text-gray-400" />
+          <span className="text-sm text-gray-400">Loading users...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative">

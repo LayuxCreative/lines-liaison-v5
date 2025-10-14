@@ -13,12 +13,12 @@ import {
   X
 } from 'lucide-react';
 import { User, PermissionGroup } from '../../types';
-import { nodeApiService } from '../../services/nodeApiService';
+import { supabaseService } from '../../services/supabaseService';
 import { useAuth } from '../../contexts/AuthContext';
-import { useNotifications } from '../../contexts/NotificationContext';
+import { useNotifications } from "../../hooks/useNotifications";
 import PermissionGroups from './PermissionGroups';
 import ImageUploader from '../common/ImageUploader';
-import { imageStorageService } from '../../services/imageStorageService';
+import { imageStorageService } from '../../services/storageService';
 import { activityLogger } from '../../utils/activityLogger';
 
 interface UserManagementProps {
@@ -79,8 +79,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
     try {
       setLoading(true);
       const [usersResponse, groupsResponse] = await Promise.all([
-        nodeApiService.getUsers(),
-        nodeApiService.getPermissionGroups()
+        supabaseService.getUsers(),
+        supabaseService.getPermissionGroups()
       ]);
       
       setUsers(usersResponse.data || []);
@@ -146,7 +146,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
         status: 'available' as const
       };
       
-      const response = await nodeApiService.createUser(userData);
+      const response = await supabaseService.createUser(userData);
       const createdUser = response.data;
       if (createdUser) {
         setUsers([...users, createdUser]);
@@ -193,8 +193,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
         updatedFields: Object.keys(updates)
       });
       
-      console.log('Calling nodeApiService.updateUser...');
-      const response = await nodeApiService.updateUser(userId, updates);
+      console.log('Calling supabaseService.updateUser...');
+      const response = await supabaseService.updateUser(userId, updates);
       const updatedUser = response.data;
       if (updatedUser) {
         console.log('Update successful, result:', updatedUser);
@@ -528,9 +528,25 @@ const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
                     <div className="flex items-center justify-between">
                       <span className="text-gray-600 text-sm">Status:</span>
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        user.status === 'available' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
+                        user.status === 'available' ? 'bg-green-100 text-green-600' :
+                        user.status === 'busy' ? 'bg-red-100 text-red-600' :
+                        user.status === 'away' ? 'bg-yellow-100 text-yellow-600' :
+                        user.status === 'in_meeting' ? 'bg-red-100 text-red-600' :
+                        user.status === 'on_break' ? 'bg-orange-100 text-orange-600' :
+                        user.status === 'out_of_office' ? 'bg-gray-100 text-gray-600' :
+                        user.status === 'vacation' ? 'bg-blue-100 text-blue-600' :
+                        user.status === 'sick_leave' ? 'bg-purple-100 text-purple-600' :
+                        'bg-gray-100 text-gray-600'
                       }`}>
-                        {user.status === 'available' ? 'Available' : 'Away'}
+                        {user.status === 'available' ? 'متاح' :
+                         user.status === 'busy' ? 'مشغول' :
+                         user.status === 'away' ? 'غائب' :
+                         user.status === 'in_meeting' ? 'في اجتماع' :
+                         user.status === 'on_break' ? 'في استراحة' :
+                         user.status === 'out_of_office' ? 'خارج المكتب' :
+                         user.status === 'vacation' ? 'في إجازة' :
+                         user.status === 'sick_leave' ? 'إجازة مرضية' :
+                         user.status || 'غير محدد'}
                       </span>
                     </div>
 

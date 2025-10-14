@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { unsplashService } from '../../services/unsplashService';
-import { imageStorageService } from '../../services/imageStorageService';
+import { imageStorageService } from '../../services/storageService';
 
 const UnsplashTest: React.FC = () => {
   const [status, setStatus] = useState<string>('Ready');
@@ -29,7 +29,7 @@ const UnsplashTest: React.FC = () => {
 
       // Test 3: Upload to Supabase
       setStatus('Uploading to Supabase...');
-      const uploadResult = await imageStorageService.uploadFromUnsplash(testImage, 'test-user');
+      const uploadResult = await imageStorageService.uploadFromUnsplash(testImage, 'admin-user');
 
       if (uploadResult.success) {
         setImageUrl(uploadResult.url!);

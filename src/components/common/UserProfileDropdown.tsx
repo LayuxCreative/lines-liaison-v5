@@ -20,8 +20,12 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({
   const [isStatusSelectorOpen, setIsStatusSelectorOpen] = useState(false);
 
   const handleStatusChange = (status: UserStatusType) => {
+    console.log('🎯 handleStatusChange called with status:', status);
     if (updateUserStatus) {
+      console.log('📞 Calling updateUserStatus...');
       updateUserStatus(status);
+    } else {
+      console.log('❌ updateUserStatus function not available');
     }
   };
 
@@ -84,19 +88,22 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({
             <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
               <div className="flex items-center space-x-3">
                 <div className="relative">
-                  <img
-                    src={
-                      user?.avatar ||
-                      `https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=48&h=48&fit=crop`
-                    }
-                    alt={user?.name || "User"}
-                    className="w-12 h-12 rounded-full object-cover"
-                  />
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-lg font-semibold">
+                    {(user?.avatar_url || user?.avatar) ? (
+                      <img
+                        src={user.avatar_url || user.avatar}
+                        alt={user.full_name || user.name}
+                        className="w-12 h-12 rounded-full object-cover"
+                      />
+                    ) : (
+                      (user?.full_name || user?.name)?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || 'U'
+                    )}
+                  </div>
                   <UserStatusIndicator status={user?.status} size="md" />
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-medium text-gray-900">
-                    {user?.name}
+                    {user?.full_name || user?.name}
                   </p>
                   <p className="text-xs text-gray-500">{user?.email}</p>
                   <p className="text-xs text-blue-600 font-medium">

@@ -37,7 +37,7 @@ import {
   Shield,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
-import { useNotifications } from "../../contexts/NotificationContext";
+import { useNotifications } from "../../hooks/useNotifications";
 import NotificationDropdown from "../common/NotificationDropdown";
 import GlobalSearch from "../common/GlobalSearch";
 import UserProfileDropdown from "../common/UserProfileDropdown";
@@ -126,6 +126,12 @@ const DashboardHeader: React.FC = () => {
           path: "/dashboard/analytics",
           icon: TrendingUp,
           description: "Performance metrics",
+        },
+        {
+          label: "Performance",
+          path: "/dashboard/performance",
+          icon: Activity,
+          description: "System performance monitoring",
         },
         {
           label: "Quick Actions",
@@ -418,7 +424,10 @@ const DashboardHeader: React.FC = () => {
             {/* Notifications */}
             <div className="relative">
               <button
-                onClick={() => setIsNotificationOpen(!isNotificationOpen)}
+                onClick={() => {
+                  console.log('Notification button clicked, current state:', isNotificationOpen);
+                  setIsNotificationOpen(!isNotificationOpen);
+                }}
                 className="relative p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all duration-300"
               >
                 <Bell className="w-5 h-5" />
@@ -441,19 +450,22 @@ const DashboardHeader: React.FC = () => {
                 className="flex items-center space-x-3 p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-all duration-300"
               >
                 <div className="relative">
-                  <img
-                    src={
-                      user.avatar ||
-                      `https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=40&h=40&fit=crop`
-                    }
-                    alt={user.name}
-                    className="w-8 h-8 rounded-full object-cover"
-                  />
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-semibold">
+                    {(user.avatar_url || user.avatar) ? (
+                      <img
+                        src={user.avatar_url || user.avatar}
+                        alt={user.full_name || user.name}
+                        className="w-8 h-8 rounded-full object-cover"
+                      />
+                    ) : (
+                      (user.full_name || user.name)?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase() || 'U'
+                    )}
+                  </div>
                   <UserStatusIndicator status={user.status} size="sm" />
                 </div>
                 <div className="hidden sm:block text-left">
                   <p className="text-sm font-medium text-gray-900">
-                    {user.name}
+                    {user.full_name || user.name}
                   </p>
                   <p className="text-xs text-gray-500">
                     {getRoleDisplayName(user.role)}
@@ -525,14 +537,17 @@ const DashboardHeader: React.FC = () => {
                   <div className="px-4 py-3 bg-gray-50 rounded-lg mb-2">
                     <div className="flex items-center space-x-3">
                       <div className="relative">
-                        <img
-                          src={
-                            user.avatar ||
-                            `https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=40&h=40&fit=crop`
-                          }
-                          alt={user.name}
-                          className="w-10 h-10 rounded-full object-cover"
-                        />
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-base font-semibold">
+                          {user.avatar ? (
+                            <img
+                              src={user.avatar}
+                              alt={user.name}
+                              className="w-10 h-10 rounded-full object-cover"
+                            />
+                          ) : (
+                            user.name?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase() || 'U'
+                          )}
+                        </div>
                         <UserStatusIndicator status={user.status} size="md" />
                       </div>
                       <div>

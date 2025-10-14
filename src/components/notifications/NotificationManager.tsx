@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { nodeApiService } from '../../services/nodeApiService';
+import { supabaseService } from '../../services/supabaseService';
 import { useAuth } from '../../contexts/AuthContext';
 
 // Types
@@ -213,7 +213,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     const loadNotifications = async () => {
       dispatch({ type: 'SET_LOADING', payload: true });
       try {
-        const response = await nodeApiService.getNotifications(user.id);
+        const response = await supabaseService.getNotifications(user.id);
         if (response.success && response.data) {
           dispatch({ type: 'SET_NOTIFICATIONS', payload: response.data as unknown as Notification[] });
         } else {
@@ -238,7 +238,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     const setupSubscription = async () => {
       try {
-        subscription = await nodeApiService.subscribeToNotifications(
+        subscription = await supabaseService.subscribeToNotifications(
           user.id,
           (payload: any) => {
             if (payload.eventType === 'INSERT') {

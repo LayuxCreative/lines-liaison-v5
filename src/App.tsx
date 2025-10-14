@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from "react";
+import React, { Suspense, lazy, useEffect } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -14,12 +14,18 @@ import Footer from "./components/common/Footer";
 import LoadingSpinner from "./components/common/LoadingSpinner";
 import ScrollToTop from "./components/common/ScrollToTop";
 import ErrorBoundary from "./components/common/ErrorBoundary";
+import DevErrorBoundary from "./components/common/DevErrorBoundary";
+import AuthGuard from "./components/auth/AuthGuard";
 import GlobalErrorBoundary from "./components/common/GlobalErrorBoundary";
+import DatabaseStatusWidget from "./components/common/DatabaseStatusWidget";
+import RealtimeActivityLogger from "./components/realtime/RealtimeActivityLogger";
+import { createSkipLink } from "./utils/accessibility";
 
 // Public pages - keep critical ones non-lazy for better initial load
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Logout from "./pages/Logout";
+import EmailConfirmation from "./components/auth/EmailConfirmation";
 
 // Lazy load non-critical pages for better performance
 const Services = lazy(() => import("./pages/Services"));
@@ -39,20 +45,46 @@ const Contracts = lazy(() => import("./pages/dashboard/Contracts"));
 const Tasks = lazy(() => import("./pages/dashboard/Tasks"));
 const Profile = lazy(() => import("./pages/dashboard/Profile"));
 const Settings = lazy(() => import("./pages/dashboard/Settings"));
+const PerformanceDashboard = lazy(() => import("./components/dashboard/PerformanceDashboard"));
 const CommunicationHub = lazy(() => import("./components/communication/CommunicationHub"));
+const RealtimeTestPage = lazy(() => import("./pages/RealtimeTestPage"));
+const UserActivityPage = lazy(() => import("./pages/UserActivityPage"));
+const SupabaseTestPage = lazy(() => import("./pages/SupabaseTestPage"));
+const AuthDebug = lazy(() => import("./pages/AuthDebug"));
+const DataDebug = lazy(() => import("./pages/DataDebug"));
 
 const AppContent: React.FC = () => {
   const { user } = useAuth();
   const location = useLocation();
   const isDashboard = location.pathname.startsWith("/dashboard");
 
+  // Add skip links for accessibility
+  useEffect(() => {
+    const skipLink = createSkipLink('main-content', 'Skip to main content');
+    document.body.insertBefore(skipLink, document.body.firstChild);
+    
+    return () => {
+      if (skipLink && skipLink.parentNode === document.body) {
+        document.body.removeChild(skipLink);
+      }
+    };
+  }, []);
+
   // Enable realtime subscriptions when user is logged in
   // Realtime subscription disabled
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* Add RealtimeActivityLogger for global activity logging */}
+      {user && (
+        <RealtimeActivityLogger
+          userId={user.id}
+          userEmail={user.email}
+        />
+      )}
+      
       {isDashboard && user ? <DashboardHeader /> : <Header />}
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         <Routes>
           {/* Public routes */}
           <Route path="/" element={<Home />} />
@@ -64,77 +96,92 @@ const AppContent: React.FC = () => {
             element={user ? <Navigate to="/dashboard" /> : <Login />}
           />
           <Route path="/logout" element={<Logout />} />
+          <Route path="/confirm-email" element={<EmailConfirmation />} />
+          <Route path="/auth-debug" element={<AuthDebug />} />
+          <Route path="/data-debug" element={<DataDebug />} />
 
           {/* Protected dashboard routes */}
           <Route
             path="/dashboard"
-            element={user ? <Dashboard /> : <Navigate to="/login" />}
+            element={<AuthGuard><Dashboard /></AuthGuard>}
           />
           <Route
             path="/dashboard/projects"
-            element={user ? <Projects /> : <Navigate to="/login" />}
+            element={<AuthGuard><Projects /></AuthGuard>}
           />
           <Route
             path="/dashboard/create-project"
-            element={user ? <CreateProject /> : <Navigate to="/login" />}
+            element={<AuthGuard><CreateProject /></AuthGuard>}
           />
           <Route
             path="/dashboard/projects/:id"
-            element={user ? <ProjectDetails /> : <Navigate to="/login" />}
+            element={<AuthGuard><ProjectDetails /></AuthGuard>}
           />
           <Route
             path="/dashboard/files"
-            element={user ? <Files /> : <Navigate to="/login" />}
+            element={<AuthGuard><Files /></AuthGuard>}
           />
           <Route
             path="/dashboard/communication"
-            element={user ? <Communication /> : <Navigate to="/login" />}
+            element={<AuthGuard><Communication /></AuthGuard>}
           />
           <Route
             path="/dashboard/communication-hub"
             element={
-              user ? (
+              <AuthGuard>
                 <CommunicationHub currentUser={{ 
-                  id: user.id,
-                  name: user.name || '',
-                  avatar: user.avatar
+                  id: user?.id || '',
+                  name: user?.name || '',
+                  ...(user?.avatar && { avatar: user.avatar })
                 }} />
-              ) : (
-                <Navigate to="/login" />
-              )
+              </AuthGuard>
             }
           />
           <Route
             path="/dashboard/reports"
-            element={user ? <Reports /> : <Navigate to="/login" />}
+            element={<AuthGuard><Reports /></AuthGuard>}
           />
           <Route
             path="/dashboard/invoices"
-            element={user ? <Invoices /> : <Navigate to="/login" />}
+            element={<AuthGuard><Invoices /></AuthGuard>}
           />
           <Route
             path="/dashboard/contracts"
-            element={user ? <Contracts /> : <Navigate to="/login" />}
+            element={<AuthGuard><Contracts /></AuthGuard>}
           />
           <Route
             path="/dashboard/tasks"
-            element={user ? <Tasks /> : <Navigate to="/login" />}
+            element={<AuthGuard><Tasks /></AuthGuard>}
           />
           <Route
             path="/dashboard/profile"
-            element={user ? <Profile /> : <Navigate to="/login" />}
+            element={<AuthGuard><Profile /></AuthGuard>}
           />
           <Route
             path="/dashboard/settings"
-            element={user ? <Settings /> : <Navigate to="/login" />}
+            element={<AuthGuard><Settings /></AuthGuard>}
+          />
+          <Route
+            path="/dashboard/performance"
+            element={<AuthGuard><PerformanceDashboard /></AuthGuard>}
+          />
+          <Route
+            path="/dashboard/realtime-test"
+            element={<AuthGuard><RealtimeTestPage /></AuthGuard>}
+          />
+          <Route
+            path="/dashboard/users-activity"
+            element={<AuthGuard><UserActivityPage /></AuthGuard>}
+          />
+          <Route
+            path="/dashboard/supabase-test"
+            element={<AuthGuard><SupabaseTestPage /></AuthGuard>}
           />
 
           {/* Additional protected routes */}
           <Route
             path="/portal"
-            element={
-              user ? <Navigate to="/dashboard" /> : <Navigate to="/login" />
-            }
+            element={<AuthGuard><Navigate to="/dashboard" /></AuthGuard>}
           />
 
           {/* Catch all route */}
@@ -142,21 +189,24 @@ const AppContent: React.FC = () => {
         </Routes>
       </main>
       <Footer />
+      <DatabaseStatusWidget />
     </div>
   );
 };
 
 const App: React.FC = () => {
+  const ErrorBoundaryComponent = import.meta.env.DEV ? DevErrorBoundary : ErrorBoundary;
+  
   return (
     <GlobalErrorBoundary>
-      <ErrorBoundary>
+      <ErrorBoundaryComponent>
         <Router>
           <ScrollToTop />
           <Suspense fallback={<LoadingSpinner />}>
             <AppContent />
           </Suspense>
         </Router>
-      </ErrorBoundary>
+      </ErrorBoundaryComponent>
     </GlobalErrorBoundary>
   );
 };

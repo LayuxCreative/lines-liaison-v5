@@ -5,8 +5,8 @@ import {
   Edit3,
   Trash2,
 } from "lucide-react";
-import { useNotifications } from "../../contexts/NotificationContext";
-import { nodeApiService } from "../../services/nodeApiService";
+import { useNotifications } from "../../hooks/useNotifications";
+import { supabaseService } from "../../services/supabaseService";
 import { PermissionGroup } from "../../types";
 
 interface Permission {
@@ -96,7 +96,7 @@ const PermissionsManagement: React.FC<PermissionsManagementProps> = ({
         updated_at: new Date(),
       };
 
-      const response = await nodeApiService.createPermissionGroup(group);
+      const response = await supabaseService.createPermissionGroup(group);
       const createdGroup = response.data;
 
       const updatedGroups = [...permissionGroups, createdGroup];
@@ -193,7 +193,7 @@ const PermissionsManagement: React.FC<PermissionsManagementProps> = ({
         updated_at: new Date(),
       };
 
-      const response = await nodeApiService.updatePermissionGroup(editingPermissionGroup.id, updatedGroup);
+      const response = await supabaseService.updatePermissionGroup(editingPermissionGroup.id, updatedGroup);
       const savedGroup = response.data;
 
       const updatedGroups = permissionGroups.map((group) =>

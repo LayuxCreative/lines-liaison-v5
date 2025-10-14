@@ -11,6 +11,7 @@ export interface Message {
   fileName?: string;
   fileSize?: number;
   replyTo?: string;
+  reactions?: { [emoji: string]: string[] };
   edited?: boolean;
   editedAt?: Date;
 }
@@ -416,10 +417,25 @@ class SocketService {
 
   // User status
   updateStatus(status: User['status']): void {
-    if (!this.socket || !this.currentUser) return;
+    if (this.socket && this.currentUser) {
+      this.currentUser.status = status;
+      this.socket.emit('user_status_update', { 
+        userId: this.currentUser.id, 
+        status 
+      });
+    }
+  }
 
-    this.currentUser.status = status;
-    this.socket.emit('user:status', { status });
+  // User management
+  joinUser(userId: string, userName: string): void {
+    if (this.socket) {
+      this.socket.emit('user_join', { userId, userName });
+    }
+  }
+
+  // Typing indicators with proper method name
+  typing(roomId: string): void {
+    this.startTyping(roomId);
   }
 
   // Call operations
@@ -453,6 +469,40 @@ class SocketService {
     }
 
     this.socket.emit('call:end', { roomId });
+  }
+
+  // Message reactions
+  addReaction(roomId: string, messageId: string, emoji: string, userId: string): void {
+    if (!this.socket) {
+      throw new Error('Not connected to chat server');
+    }
+
+    this.socket.emit('message:reaction:add', { roomId, messageId, emoji, userId });
+  }
+
+  removeReaction(roomId: string, messageId: string, emoji: string, userId: string): void {
+    if (!this.socket) {
+      throw new Error('Not connected to chat server');
+    }
+
+    this.socket.emit('message:reaction:remove', { roomId, messageId, emoji, userId });
+  }
+
+  // Screen sharing
+  startScreenShare(roomId: string): void {
+    if (!this.socket || !this.currentUser) {
+      throw new Error('Not connected to chat server');
+    }
+
+    this.socket.emit('screenshare:start', { roomId, userId: this.currentUser.id });
+  }
+
+  stopScreenShare(roomId: string): void {
+    if (!this.socket || !this.currentUser) {
+      throw new Error('Not connected to chat server');
+    }
+
+    this.socket.emit('screenshare:stop', { roomId, userId: this.currentUser.id });
   }
 
   // WebRTC signaling

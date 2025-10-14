@@ -27,7 +27,7 @@ import FileViewer from "../../components/dashboard/FileViewer";
 // Removed simpleFileUploadService - using Supabase Storage instead
 import SimpleToast, { useToast } from "../../components/common/SimpleToast";
 import { formatDistanceToNow } from "date-fns";
-// import { nodeApiService } from "../../services/nodeApiService";
+// import { backendApiService } from "../../services/backendApiService";
 import { FileUploadModal } from "../../components/dashboard/FileUploadModal";
 import FileDisplayFooter from "../../components/dashboard/FileDisplayFooter";
 

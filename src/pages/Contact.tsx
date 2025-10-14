@@ -1,21 +1,20 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   Mail,
   Phone,
   MapPin,
-  Clock,
   Send,
-  Building2,
-  Globe,
-  Linkedin,
+  Clock,
   MessageSquare,
 } from "lucide-react";
 
+// Remove unused import
+// import { useAuth } from "../contexts/AuthContext";
 
 const Contact: React.FC = () => {
-  // Auth context not used on Contact page
+  // Remove unused user variable
+  // const { user } = useAuth();
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -422,7 +421,7 @@ const Contact: React.FC = () => {
                 Call Now
               </Link>
               <Link
-                to="mailto:info@lines-liaison.xyz"
+                to="mailto:support@astrolabetech.xyz"
                 className="inline-flex items-center px-8 py-4 border-2 border-white text-white rounded-lg font-semibold hover:bg-white hover:text-blue-600 transition-all duration-300"
               >
                 <Mail className="mr-2 w-5 h-5" />

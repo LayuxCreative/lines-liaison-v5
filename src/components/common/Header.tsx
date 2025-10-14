@@ -13,7 +13,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
-import { useNotifications } from "../../contexts/NotificationContext";
+import { useNotifications } from "../../hooks/useNotifications";
 import NotificationDropdown from "./NotificationDropdown";
 import GlobalSearch from "./GlobalSearch";
 import UserStatusIndicator from "./UserStatusIndicator";
@@ -241,19 +241,22 @@ const Header: React.FC = () => {
                     className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 transition-all duration-300 group"
                   >
                     <div className="relative">
-                      <img
-                        src={
-                          user.avatar ||
-                          `https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=40&h=40&fit=crop`
-                        }
-                        alt={user.name}
-                        className="w-8 h-8 rounded-full object-cover ring-2 ring-transparent group-hover:ring-blue-200 transition-all duration-300"
-                      />
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-semibold ring-2 ring-transparent group-hover:ring-blue-200 transition-all duration-300">
+                        {(user.avatar_url || user.avatar) ? (
+                          <img
+                            src={user.avatar_url || user.avatar}
+                            alt={user.full_name || user.name}
+                            className="w-8 h-8 rounded-full object-cover"
+                          />
+                        ) : (
+                          (user.full_name || user.name)?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase() || 'U'
+                        )}
+                      </div>
                       <UserStatusIndicator status={user?.status} size="sm" />
                     </div>
                     <div className="hidden sm:block text-left">
                       <p className="text-sm font-medium text-gray-700 group-hover:text-blue-600 transition-colors">
-                        {user.name?.split(" ")[0] || "User"}
+                        {(user.full_name || user.name)?.split(" ")[0] || "User"}
                       </p>
                       <p className="text-xs text-gray-500">
                         {getRoleDisplayName(user.role)}

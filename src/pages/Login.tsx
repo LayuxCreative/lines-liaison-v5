@@ -6,24 +6,23 @@ import {
   Lock,
   Eye,
   EyeOff,
-  Building2,
   ArrowRight,
-  CheckCircle,
   Wifi,
   WifiOff,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import { supabase } from "../lib/supabase";
 import LoadingSpinner from "../components/common/LoadingSpinner";
-
-
+import TwoFactorLogin from "../components/auth/TwoFactorLogin";
 
 const Login: React.FC = () => {
-  const [email, setEmail] = useState("admin@linesliaison.com");
-  const [password, setPassword] = useState("0MGXX!:n4x=|):(U");
+  const [email, setEmail] = useState("support@astrolabetech.xyz");
+  const [password, setPassword] = useState("Support@2024!");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showTwoFactor, setShowTwoFactor] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<{
     isConnected: boolean;
     message: string;
@@ -46,166 +45,178 @@ const Login: React.FC = () => {
     }
   }, [user, isLoading, navigate, from]);
 
-  // Test Node.js API connection on component mount
+  // Test Supabase database connection on component mount
   useEffect(() => {
     const testConnection = async () => {
+      console.log('🔍 Testing Supabase connection...');
       setConnectionStatus({
         isConnected: false,
-        message: "Checking connection...",
+        message: "Checking database connection...",
         isChecking: true
       });
 
       try {
-        // Test Node.js API health endpoint
-        const response = await fetch('http://localhost:3001/api/health');
+        // Test 1: Check if Supabase client is initialized
+        if (!supabase) {
+          throw new Error('Supabase client not initialized');
+        }
+
+        // Test 2: Simple health check using auth.getSession()
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        console.log('🔍 Auth session test:', { hasData: !!sessionData, error: sessionError });
         
-        if (response.ok) {
+        // Test 3: Try a simple database query
+        const { data: testData, error: testError } = await supabase
+          .from('profiles')
+          .select('id')
+          .limit(1);
+        
+        console.log('🔍 Database query test:', { 
+          hasData: !!testData, 
+          error: testError,
+          dataLength: testData?.length || 0 
+        });
+        
+        // Connection is successful if we can reach Supabase (even with errors like RLS)
+        if (!sessionError || testError?.code === 'PGRST116' || testError?.message?.includes('RLS')) {
           setConnectionStatus({
             isConnected: true,
-            message: "Connected successfully",
+            message: "Successfully connected to database",
             isChecking: false
           });
+          console.log('✅ Supabase connection successful');
         } else {
-          setConnectionStatus({
-            isConnected: false,
-            message: "API server not responding",
-            isChecking: false
-          });
+          throw new Error(`Connection failed: ${sessionError?.message || testError?.message}`);
         }
       } catch (error) {
-        console.error('Connection test failed:', error);
+        console.error('❌ Supabase connection test failed:', error);
         setConnectionStatus({
           isConnected: false,
-          message: "API server not available. Please ensure the backend server is running.",
+          message: "Not connected to database",
           isChecking: false
         });
       }
     };
 
-    testConnection();
+    // Add a small delay to ensure component is mounted
+    const timer = setTimeout(testConnection, 500);
+    return () => clearTimeout(timer);
   }, []);
 
 
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // 🔍 DEBUG: Login attempt started
+    console.log('🔍 DEBUG: Login attempt started', { 
+      email, 
+      timestamp: new Date().toISOString(),
+      connectionStatus: connectionStatus.isConnected 
+    });
+    
+    if (!email || !password) {
+      setError("Please fill in all fields");
+      return;
+    }
+
+    setIsSubmitting(true);
     setError("");
     setSuccess("");
-    setIsSubmitting(true);
-
-    // Skip connection check - allow login attempt regardless
-
-    // Get form data using FormData as recommended
-    const formData = new FormData(e.currentTarget);
-    const formEmail = formData.get('email') as string;
-    const formPassword = formData.get('password') as string;
-
-    // Basic validation
-    if (!formEmail || !formPassword) {
-      setError('Please enter both email and password');
-      setIsSubmitting(false);
-      return;
-    }
-
-    if (!formEmail.includes('@')) {
-      setError('Please enter a valid email address');
-      setIsSubmitting(false);
-      return;
-    }
 
     try {
-      console.log('🔑 Attempting login with provided credentials...');
+      // 🔍 DEBUG: Calling login function
+      console.log('🔍 DEBUG: Calling login function with email:', email);
       
-      const result = await login(formEmail, formPassword);
+      const result = await login(email, password);
       
       if (result.success) {
-        setSuccess("Login successful! Redirecting to dashboard...");
-        setTimeout(() => {
-          navigate("/dashboard", { replace: true });
-        }, 1500);
+        // 🔍 DEBUG: Login successful
+        console.log('🔍 DEBUG: Login successful, redirecting...');
+        setSuccess("Login successful! Redirecting...");
+        navigate(from, { replace: true });
       } else {
-        let errorMessage = result.error || "Login failed";
+        // Handle login failure
+        console.error('🔍 DEBUG: Login failed:', result.error);
         
-        // Provide more user-friendly error messages
-        if (errorMessage.includes('Invalid login credentials')) {
-          errorMessage = 'Invalid email or password. Please check your credentials and try again.';
-        } else if (errorMessage.includes('Email not confirmed')) {
-          errorMessage = 'Please check your email and confirm your account before logging in.';
-        } else if (errorMessage.includes('Too many requests')) {
-          errorMessage = 'Too many login attempts. Please wait a few minutes and try again.';
+        if (result.requiresTwoFactor) {
+          setShowTwoFactor(true);
+        } else if (result.error?.includes('Email not confirmed')) {
+          setError("Please confirm your email before logging in. Check your inbox.");
+        } else {
+          setError(result.error || "Login failed. Please try again.");
         }
-        
-        setError(errorMessage);
       }
-    } catch (error) {
-      console.error('❌ Login error:', error);
-      setError('Network error. Please check your connection and try again.');
+    } catch (err: unknown) {
+      // 🔍 DEBUG: Unexpected error occurred
+      console.error('🔍 DEBUG: Unexpected error:', err);
+      
+      const error = err as Error;
+      setError(error.message || "An unexpected error occurred. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // Test login function for debugging
+  const testLogin = async () => {
+    console.log('🧪 Testing login with support@astrolabetech.xyz');
+    setError("");
+    setSuccess("");
+    setIsSubmitting(true);
+    
+    try {
+      const result = await login('support@astrolabetech.xyz', 'Support@2024!');
+      console.log('🧪 Test login result:', result);
+      
+      if (result.success) {
+        setSuccess("Test login successful!");
+      } else {
+        setError(`Test login failed: ${result.error}`);
+      }
+    } catch (err) {
+      console.error('🧪 Test login error:', err);
+      setError("Test login failed with unexpected error");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
+  const handleTwoFactorVerified = async () => {
+    setSuccess("Login successful! Redirecting to dashboard...");
+    setTimeout(() => {
+      navigate("/dashboard", { replace: true });
+    }, 1500);
+  };
 
+  const handleTwoFactorBack = () => {
+    setShowTwoFactor(false);
+    setEmail("");
+    setPassword("");
+  };
 
+  // Show 2FA form if required
+  if (showTwoFactor) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-teal-50 flex items-center justify-center px-4 sm:px-6 lg:px-8">
+        <TwoFactorLogin
+          email={email}
+          onVerified={handleTwoFactorVerified}
+          onBack={handleTwoFactorBack}
+          isLoading={isSubmitting}
+        />
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-teal-50 flex items-start justify-center px-4 sm:px-6 lg:px-8 pt-16">
-      <div className="max-w-4xl w-full py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-        {/* Left Side - Branding */}
-        <motion.div
-          initial={{ opacity: 0, x: -30 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.8 }}
-          className="text-center lg:text-left lg:sticky lg:top-8"
-        >
-          <div className="flex items-center justify-center lg:justify-start space-x-3 mb-6">
-            <div className="flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-teal-600 rounded-2xl shadow-lg">
-              <Building2 className="w-8 h-8 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 leading-tight">
-                LiNES AND LiAiSON
-              </h1>
-              <p className="text-sm text-gray-600 font-medium">
-                Engineering Excellence
-              </p>
-            </div>
-          </div>
-
-          <h2 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-4">
-            Welcome Back
-          </h2>
-          <p className="text-lg text-gray-600 mb-6">
-            Access your project management dashboard and collaborate with your
-            team on engineering excellence.
-          </p>
-
-          {/* Security Note */}
-          <div className="bg-green-50 rounded-lg p-4">
-            <div className="flex items-start space-x-3">
-              <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-              <div>
-                <h4 className="text-sm font-medium text-green-900">
-                  Secure Access
-                </h4>
-                <p className="text-xs text-green-700 mt-1">
-                  Your data is protected with enterprise-grade security and
-                  encryption.
-                </p>
-              </div>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Right Side - Login Form */}
-        <motion.div
-          initial={{ opacity: 0, x: 30 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.2, duration: 0.8 }}
-          className="max-w-md w-full mx-auto"
-        >
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-teal-50 flex items-center justify-center px-4 sm:px-6 lg:px-8">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8 }}
+        className="max-w-md w-full"
+      >
           <div className="bg-white rounded-2xl shadow-xl p-8">
             {/* Header */}
             <div className="text-center mb-6">
@@ -232,9 +243,9 @@ const Login: React.FC = () => {
                     ? 'text-gray-600' 
                     : 'text-red-600'
                 }`}>
-                  {connectionStatus.isChecking && 'Checking Supabase connection...'}
-                  {connectionStatus.isConnected && !connectionStatus.isChecking && 'Connected successfully'}
-                  {!connectionStatus.isConnected && !connectionStatus.isChecking && 'Connection failed. Please try again.'}
+                  {connectionStatus.isChecking && 'Checking database connection...'}
+                  {connectionStatus.isConnected && !connectionStatus.isChecking && 'Successfully connected to database'}
+                  {!connectionStatus.isConnected && !connectionStatus.isChecking && 'Not connected to database'}
                 </p>
               </div>
             </div>
@@ -243,6 +254,29 @@ const Login: React.FC = () => {
             {error && (
               <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
                 <p className="text-red-600 text-sm">{error}</p>
+                {error.includes('Please confirm your email') && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (email) {
+                        try {
+                          await supabase.auth.resend({
+                            type: 'signup',
+                            email: email,
+                          });
+                          setSuccess('A new confirmation email has been sent to your email address');
+                          setError('');
+                        } catch (err) {
+                          console.error('Error resending confirmation:', err);
+                          setError('Failed to send confirmation email. Please try again.');
+                        }
+                      }
+                    }}
+                    className="mt-2 text-blue-600 hover:text-blue-800 text-sm underline"
+                  >
+                    Resend Confirmation Email
+                  </button>
+                )}
               </div>
             )}
 
@@ -276,7 +310,7 @@ const Login: React.FC = () => {
                     required
                     autoComplete="email"
                     className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                    placeholder="admin@linesliaison.com"
+                    placeholder="Enter your email"
                   />
                 </div>
               </div>
@@ -319,33 +353,34 @@ const Login: React.FC = () => {
               </div>
 
               {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full bg-gradient-to-r from-blue-600 to-teal-600 text-white py-3 px-4 rounded-lg font-semibold hover:from-blue-700 hover:to-teal-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-300 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? (
-                  <LoadingSpinner size="sm" />
-                ) : (
-                  <>
-                    <span>Sign In</span>
-                    <ArrowRight className="w-5 h-5" />
-                  </>
-                )}
-              </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full bg-gradient-to-r from-blue-600 to-teal-600 text-white py-3 px-4 rounded-lg font-semibold hover:from-blue-700 hover:to-teal-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-300 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? (
+                <LoadingSpinner size="sm" />
+              ) : (
+                <>
+                  <span>Sign In</span>
+                  <ArrowRight className="w-5 h-5" />
+                </>
+              )}
+            </button>
 
-              {/* Admin Account Info */}
-              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-center space-x-2">
-                  <CheckCircle className="w-5 h-5 text-blue-600" />
-                  <p className="text-sm text-blue-800 font-medium">
-                    Admin Account Ready
-                  </p>
-                </div>
-                <p className="text-xs text-blue-600 mt-1">
-                  Use the credentials above to sign in as administrator
-                </p>
-              </div>
+            {/* Test Login Button */}
+            <button
+              type="button"
+              onClick={testLogin}
+              disabled={isSubmitting}
+              className="w-full mt-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white py-3 px-4 rounded-lg font-semibold hover:from-green-700 hover:to-emerald-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all duration-300 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? (
+                <LoadingSpinner size="sm" />
+              ) : (
+                <span>🧪 Test Login</span>
+              )}
+            </button>
             </form>
 
             {/* Contact Link */}
@@ -362,8 +397,6 @@ const Login: React.FC = () => {
             </div>
           </div>
         </motion.div>
-        </div>
-      </div>
     </div>
   );
 };

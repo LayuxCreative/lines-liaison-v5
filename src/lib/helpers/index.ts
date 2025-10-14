@@ -101,7 +101,7 @@ export const sortBy = <T>(array: T[], key: keyof T, direction: 'asc' | 'desc' = 
 };
 
 // Utility Helpers
-export const debounce = <T extends (...args: any[]) => any>(
+export const debounce = <T extends (...args: unknown[]) => unknown>(
   func: T,
   wait: number
 ): ((...args: Parameters<T>) => void) => {
@@ -113,7 +113,7 @@ export const debounce = <T extends (...args: any[]) => any>(
   };
 };
 
-export const throttle = <T extends (...args: any[]) => any>(
+export const throttle = <T extends (...args: unknown[]) => unknown>(
   func: T,
   limit: number
 ): ((...args: Parameters<T>) => void) => {
