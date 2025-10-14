@@ -1,0 +1,18 @@
+{
+  "name": "supabase-node-example",
+  "version": "1.0.0",
+  "description": "Node.js example with Supabase integration",
+  "type": "module",
+  "main": "supabase-node-example.js",
+  "scripts": {
+    "start": "node supabase-node-example.js",
+    "dev": "node --watch supabase-node-example.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "dotenv": "^16.3.1"
+  },
+  "keywords": ["supabase", "nodejs", "database"],
+  "author": "Lines Liaison",
+  "license": "MIT"
+}

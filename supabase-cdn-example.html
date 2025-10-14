@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مثال Supabase CDN</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            direction: rtl;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .button {
+            background: linear-gradient(45deg, #3B82F6, #8B5CF6);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+        .result {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            color: white;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .loading {
+            color: #10B981;
+            font-weight: bold;
+        }
+        .error {
+            color: #EF4444;
+            font-weight: bold;
+        }
+        .success {
+            color: #10B981;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 مثال Supabase CDN</h1>
+        
+        <div style="text-align: center;">
+            <button class="button" onclick="fetchTodos()">📋 جلب المهام</button>
+            <button class="button" onclick="addTodo()">➕ إضافة مهمة</button>
+            <button class="button" onclick="testConnection()">🔗 اختبار الاتصال</button>
+        </div>
+        
+        <div id="result" class="result">
+            <div class="success">✅ تم تحميل Supabase بنجاح من CDN</div>
+            <div>انقر على أي زر لبدء التفاعل مع قاعدة البيانات</div>
+        </div>
+    </div>
+
+    <script type="module">
+        // استيراد Supabase من CDN
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+        
+        // دالة آمنة للحصول على الإعدادات
+        const getSupabaseCredentials = () => {
+            // في الإنتاج، يجب استخدام متغيرات البيئة أو خدمة إدارة المفاتيح
+            const url = prompt('أدخل Supabase URL:', 'https://mtpnlowzrbdqkbxjgpvm.supabase.co');
+            const key = prompt('أدخل Supabase Anon Key:');
+            
+            if (!url || !key) {
+                throw new Error('يجب إدخال URL و Anon Key');
+            }
+            
+            return { url, key };
+        };
+        
+        // الحصول على الإعدادات وإنشاء العميل
+        let supabase;
+        try {
+            const credentials = getSupabaseCredentials();
+            supabase = createClient(credentials.url, credentials.key);
+        } catch (error) {
+            document.getElementById('result').innerHTML = 
+                `<div class="error">❌ خطأ في الإعدادات: ${error.message}</div>`;
+            // إنهاء التنفيذ في حالة الخطأ
+            throw error;
+        }
+        
+        // عنصر النتائج
+        const resultDiv = document.getElementById('result');
+        
+        // دالة لعرض النتائج
+        function showResult(message, type = 'success') {
+            const timestamp = new Date().toLocaleString('ar-SA');
+            const className = type === 'error' ? 'error' : type === 'loading' ? 'loading' : 'success';
+            resultDiv.innerHTML = `<div class="${className}">[${timestamp}] ${message}</div>`;
+        }
+        
+        // دالة جلب المهام
+        window.fetchTodos = async function() {
+            try {
+                showResult('🔄 جاري جلب المهام...', 'loading');
+                
+                const { data, error } = await supabase
+                    .from('todos')
+                    .select('*');
+                
+                if (error) {
+                    throw error;
+                }
+                
+                if (data && data.length > 0) {
+                    const todosText = data.map((todo, index) => 
+                        `${index + 1}. ${todo.title || todo.task || JSON.stringify(todo)}`
+                    ).join('\n');
+                    showResult(`✅ تم جلب ${data.length} مهمة:\n\n${todosText}`);
+                } else {
+                    showResult('📝 لا توجد مهام في قاعدة البيانات');
+                }
+                
+            } catch (error) {
+                showResult(`❌ خطأ في جلب المهام: ${error.message}`, 'error');
+                console.error('Error fetching todos:', error);
+            }
+        };
+        
+        // دالة إضافة مهمة
+        window.addTodo = async function() {
+            try {
+                showResult('🔄 جاري إضافة مهمة جديدة...', 'loading');
+                
+                const newTodo = {
+                    title: `مهمة جديدة - ${new Date().toLocaleString('ar-SA')}`,
+                    completed: false,
+                    created_at: new Date().toISOString()
+                };
+                
+                const { data, error } = await supabase
+                    .from('todos')
+                    .insert([newTodo])
+                    .select();
+                
+                if (error) {
+                    throw error;
+                }
+                
+                showResult(`✅ تم إضافة مهمة جديدة بنجاح:\n${JSON.stringify(data[0], null, 2)}`);
+                
+            } catch (error) {
+                showResult(`❌ خطأ في إضافة المهمة: ${error.message}`, 'error');
+                console.error('Error adding todo:', error);
+            }
+        };
+        
+        // دالة اختبار الاتصال
+        window.testConnection = async function() {
+            try {
+                showResult('🔄 جاري اختبار الاتصال...', 'loading');
+                
+                const { data, error } = await supabase
+                    .from('todos')
+                    .select('count', { count: 'exact', head: true });
+                
+                if (error) {
+                    throw error;
+                }
+                
+                showResult(`✅ الاتصال ناجح! عدد السجلات في جدول todos: ${data || 0}`);
+                
+            } catch (error) {
+                showResult(`❌ فشل الاتصال: ${error.message}`, 'error');
+                console.error('Connection test failed:', error);
+            }
+        };
+        
+        // اختبار الاتصال عند تحميل الصفحة
+        console.log('🚀 Supabase client initialized successfully');
+        console.log('URL:', supabaseUrl);
+        console.log('Client:', supabase);
+        
+    </script>
+</body>
+</html>
