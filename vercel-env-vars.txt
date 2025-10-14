@@ -5,7 +5,7 @@ NODE_ENV=production
 
 # Supabase Configuration (Required)
 VITE_SUPABASE_URL=https://ymstntjoewkyissepjbc.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inltc3RudGpvZXdreWlzc2VwamJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcyNDA0ODgsImV4cCI6MjA3MjgxNjQ4OH0.4wKfqHYlxFE0OWm4VN6rNXqH5tCkjbp7FmF8xDodWjk
+VITE_SUPABASE_ANON_KEY=[Copy from your .env file - Supabase Anon Key]
 
 # App Configuration
 VITE_APP_NAME=LiNES AND LiAiSON Professional Platform
