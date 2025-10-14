@@ -1,0 +1,22 @@
+# Environment Variables for Vercel Deployment
+# Copy these to Vercel Dashboard > Project Settings > Environment Variables
+
+NODE_ENV=production
+
+# Supabase Configuration (Required)
+VITE_SUPABASE_URL=https://ymstntjoewkyissepjbc.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inltc3RudGpvZXdreWlzc2VwamJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcyNDA0ODgsImV4cCI6MjA3MjgxNjQ4OH0.4wKfqHYlxFE0OWm4VN6rNXqH5tCkjbp7FmF8xDodWjk
+
+# App Configuration
+VITE_APP_NAME=LiNES AND LiAiSON Professional Platform
+
+# API Configuration (Production URLs)
+VITE_API_URL=https://lines-liaison-v5-9zrollvci-layux-projects.vercel.app/api
+VITE_API_BASE_URL=https://lines-liaison-v5-9zrollvci-layux-projects.vercel.app/api
+
+# Debug Settings (Production)
+VITE_DEBUG=false
+VITE_ENABLE_LOGGING=false
+
+# Optional - Unsplash API (if needed)
+# VITE_UNSPLASH_ACCESS_KEY=your-unsplash-key
