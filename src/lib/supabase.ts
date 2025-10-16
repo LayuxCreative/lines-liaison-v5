@@ -1,14 +1,43 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+// Read env with safe fallbacks to window-injected config
+const supabaseUrl: string | undefined =
+  (import.meta as unknown as { env?: { VITE_SUPABASE_URL?: string } }).env?.VITE_SUPABASE_URL ||
+  (typeof window !== 'undefined' ? (window as unknown as { SUPABASE_URL?: string }).SUPABASE_URL : undefined)
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables')
+const supabaseAnonKey: string | undefined =
+  (import.meta as unknown as { env?: { VITE_SUPABASE_ANON_KEY?: string } }).env?.VITE_SUPABASE_ANON_KEY ||
+  (typeof window !== 'undefined' ? (window as unknown as { SUPABASE_ANON_KEY?: string }).SUPABASE_ANON_KEY : undefined)
+
+// Create a minimal stub client when config is missing to avoid hard crashes
+const createStubSupabase = () => {
+  const stubError = { message: 'Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.' }
+  return {
+    auth: {
+      async getSession() { return { data: { session: null }, error: stubError } },
+      onAuthStateChange() { return { data: { subscription: { unsubscribe() { /* no-op */ } } } } },
+      async refreshSession() { return { data: { session: null }, error: stubError } },
+      async signOut() { return { error: null } },
+      async signIn() { return { data: null, error: stubError } }
+    },
+    from() {
+      return {
+        async select() { return { data: null, error: stubError } },
+        async insert() { return { data: null, error: stubError } },
+        async update() { return { data: null, error: stubError } },
+        async delete() { return { data: null, error: stubError } }
+      }
+    },
+    storage: {
+      async listBuckets() { return { data: [], error: stubError } }
+    },
+    channel() { return { unsubscribe() { /* no-op */ } } }
+  } as unknown as ReturnType<typeof createClient>
 }
 
 // Enhanced cookie-based session management for better reliability
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = (supabaseUrl && supabaseAnonKey)
+  ? createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
@@ -54,7 +83,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       'Expires': '0'
     }
   }
-})
+  })
+  : (console.error('Missing Supabase environment variables. Using stub client.'), createStubSupabase())
 
 // Enhanced session management functions
 export const sessionManager = {
@@ -197,6 +227,10 @@ export const pingSupabaseHealth = async (timeoutMs: number = 5000): Promise<{ ok
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const baseUrl = supabaseUrl;
+
+  if (!baseUrl || !supabaseAnonKey) {
+    return { ok: false, error: 'Supabase config missing' }
+  }
 
   try {
     const res = await fetch(`${baseUrl}/auth/v1/health`, {
