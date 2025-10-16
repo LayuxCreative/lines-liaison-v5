@@ -12,8 +12,8 @@ import {
   ArrowRight,
   Filter,
 } from "lucide-react";
-import { useAuth } from "../../contexts/AuthContext";
-import { useData } from "../../contexts/DataContext";
+import { useAuth } from "../../hooks/useAuth";
+import { useData } from "../../hooks/useData";
 
 interface SearchResult {
   id: string;

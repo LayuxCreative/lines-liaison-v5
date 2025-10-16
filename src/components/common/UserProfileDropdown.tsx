@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "react-router-dom";
 import { User, Settings, LogOut } from "lucide-react";
-import { useAuth } from "../../contexts/AuthContext";
+import { useAuth } from "../../hooks/useAuth";
 import { UserStatusType } from "../../types";
 import UserStatusIndicator from "./UserStatusIndicator";
 import UserStatusSelector from "./UserStatusSelector";

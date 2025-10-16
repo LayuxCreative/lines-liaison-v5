@@ -87,6 +87,17 @@ const CallManager: React.FC<CallManagerProps> = ({
   const remoteVideosRef = useRef<{ [key: string]: HTMLVideoElement }>({});
   const callTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Keep stable refs of mutable state used inside callbacks to avoid re-subscribing effects
+  const callStateRef = useRef<CallState>(callState);
+  useEffect(() => {
+    callStateRef.current = callState;
+  }, [callState]);
+
+  const localStreamRef = useRef<MediaStream | null>(localStream);
+  useEffect(() => {
+    localStreamRef.current = localStream;
+  }, [localStream]);
+
   // Initialize call timer
   const startCallTimer = useCallback(() => {
     if (callTimerRef.current) {
@@ -172,7 +183,7 @@ const CallManager: React.FC<CallManagerProps> = ({
       socketService.off("callEnded", handleCallEnded as SocketEventHandler);
       socketService.off("webrtcSignal", handleWebRTCSignal as SocketEventHandler);
     };
-  }, [socketService, webrtcService, currentUser.id, startCallTimer]);
+  }, [socketService, webrtcService, currentUser.id, startCallTimer, endCall]);
 
   // Initialize WebRTC event handlers
   useEffect(() => {
@@ -328,7 +339,7 @@ const CallManager: React.FC<CallManagerProps> = ({
       alert(`Failed to accept call: ${errorMessage}`);
       setIncomingCall(null);
     }
-  }, [callState, currentUser.id, localStream, onCallEnd, stopCallTimer, webrtcService, socketService, incomingCall, startCallTimer]);
+  }, [currentUser.id, webrtcService, socketService, incomingCall, startCallTimer]);
 
   // Reject incoming call
   const rejectCall = async () => {
@@ -387,16 +398,17 @@ const CallManager: React.FC<CallManagerProps> = ({
 
     try {
       await activityLogger.log("call_manager_end", "info", "Ending call", {
-        roomId: callState.roomId,
-        callType: callState.callType,
-        duration: callState.duration,
-        participantsCount: callState.participants.length,
+        roomId: callStateRef.current.roomId,
+        callType: callStateRef.current.callType,
+        duration: callStateRef.current.duration,
+        participantsCount: callStateRef.current.participants.length,
         userId: currentUser.id
       });
 
       // Clean up local stream first
-      if (localStream) {
-        localStream.getTracks().forEach(track => {
+      const ls = localStreamRef.current;
+      if (ls) {
+        ls.getTracks().forEach(track => {
           try {
             track.stop();
           } catch (e) {
@@ -413,9 +425,9 @@ const CallManager: React.FC<CallManagerProps> = ({
       }
 
       // Notify server if call was active
-      if (callState.isActive) {
+      if (callStateRef.current.isActive) {
         try {
-          socketService.endCall(callState.roomId);
+          socketService.endCall(callStateRef.current.roomId);
         } catch (e) {
           console.warn("Failed to notify server of call end:", e);
         }
@@ -438,20 +450,20 @@ const CallManager: React.FC<CallManagerProps> = ({
       onCallEnd?.();
 
       await activityLogger.log("call_manager_end", "success", "Call ended successfully", {
-        roomId: callState.roomId,
-        callType: callState.callType,
-        duration: callState.duration,
-        participantsCount: callState.participants.length,
+        roomId: callStateRef.current.roomId,
+        callType: callStateRef.current.callType,
+        duration: callStateRef.current.duration,
+        participantsCount: callStateRef.current.participants.length,
         userId: currentUser.id
       });
     } catch (error) {
       clearTimeout(endTimeout);
       console.error("Error ending call:", error);
       await activityLogger.log("call_manager_end", "error", "Failed to end call", {
-        roomId: callState.roomId,
-        callType: callState.callType,
-        duration: callState.duration,
-        participantsCount: callState.participants.length,
+        roomId: callStateRef.current.roomId,
+        callType: callStateRef.current.callType,
+        duration: callStateRef.current.duration,
+        participantsCount: callStateRef.current.participants.length,
         userId: currentUser.id,
         error: error instanceof Error ? error.message : "Unknown error"
       });
@@ -471,7 +483,7 @@ const CallManager: React.FC<CallManagerProps> = ({
       stopCallTimer();
       onCallEnd?.();
     }
-  }, [callState, localStream, webrtcService, socketService, stopCallTimer, onCallEnd, currentUser.id]);
+  }, [webrtcService, socketService, stopCallTimer, onCallEnd, currentUser.id]);
 
   // Toggle audio
   const toggleAudio = async () => {

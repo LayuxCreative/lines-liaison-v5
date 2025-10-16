@@ -10,8 +10,8 @@ import {
   Wifi,
   WifiOff,
 } from "lucide-react";
-import { useAuth } from "../contexts/AuthContext";
-import { supabase } from "../lib/supabase";
+import { useAuth } from "../hooks/useAuth";
+import { supabase, pingSupabaseHealth } from "../lib/supabase";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 import TwoFactorLogin from "../components/auth/TwoFactorLogin";
 
@@ -61,32 +61,19 @@ const Login: React.FC = () => {
           throw new Error('Supabase client not initialized');
         }
 
-        // Test 2: Simple health check using auth.getSession()
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-        console.log('🔍 Auth session test:', { hasData: !!sessionData, error: sessionError });
-        
-        // Test 3: Try a simple database query
-        const { data: testData, error: testError } = await supabase
-          .from('profiles')
-          .select('id')
-          .limit(1);
-        
-        console.log('🔍 Database query test:', { 
-          hasData: !!testData, 
-          error: testError,
-          dataLength: testData?.length || 0 
-        });
-        
-        // Connection is successful if we can reach Supabase (even with errors like RLS)
-        if (!sessionError || testError?.code === 'PGRST116' || testError?.message?.includes('RLS')) {
+        // Test 2: Health ping that doesn't depend on RLS
+        const health = await pingSupabaseHealth(5000);
+        console.log('🔍 Health ping:', health);
+
+        if (health.ok) {
           setConnectionStatus({
             isConnected: true,
             message: "Successfully connected to database",
             isChecking: false
           });
-          console.log('✅ Supabase connection successful');
+          console.log('✅ Supabase health OK');
         } else {
-          throw new Error(`Connection failed: ${sessionError?.message || testError?.message}`);
+          throw new Error(`Health check failed: ${health.error || health.status}`);
         }
       } catch (error) {
         console.error('❌ Supabase connection test failed:', error);
@@ -115,6 +102,12 @@ const Login: React.FC = () => {
       connectionStatus: connectionStatus.isConnected 
     });
     
+    // Prevent submission if connection health is not OK
+    if (!connectionStatus.isConnected) {
+      setError('Authentication service is currently unreachable. Please try again later or check your connection.');
+      return;
+    }
+
     if (!email || !password) {
       setError("Please fill in all fields");
       return;
@@ -128,7 +121,17 @@ const Login: React.FC = () => {
       // 🔍 DEBUG: Calling login function
       console.log('🔍 DEBUG: Calling login function with email:', email);
       
-      const result = await login(email, password);
+      // Add a safety timeout so UI never hangs indefinitely
+      function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+        return new Promise<T>((resolve, reject) => {
+          const id = setTimeout(() => reject(new Error('Authentication service request timed out')), ms);
+          promise
+            .then((value) => { clearTimeout(id); resolve(value); })
+            .catch((err) => { clearTimeout(id); reject(err); });
+        });
+      }
+
+      const result = await withTimeout(login(email, password), 15000);
       
       if (result.success) {
         // 🔍 DEBUG: Login successful
@@ -152,35 +155,17 @@ const Login: React.FC = () => {
       console.error('🔍 DEBUG: Unexpected error:', err);
       
       const error = err as Error;
-      setError(error.message || "An unexpected error occurred. Please try again.");
+      // Provide localized message for timeout and generic errors
+      const message = error.message?.toLowerCase().includes('timed out')
+        ? 'Authentication service timed out. Please try again shortly.'
+        : (error.message || "An unexpected error occurred. Please try again.");
+      setError(message);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Test login function for debugging
-  const testLogin = async () => {
-    console.log('🧪 Testing login with support@astrolabetech.xyz');
-    setError("");
-    setSuccess("");
-    setIsSubmitting(true);
-    
-    try {
-      const result = await login('support@astrolabetech.xyz', 'Support@2024!');
-      console.log('🧪 Test login result:', result);
-      
-      if (result.success) {
-        setSuccess("Test login successful!");
-      } else {
-        setError(`Test login failed: ${result.error}`);
-      }
-    } catch (err) {
-      console.error('🧪 Test login error:', err);
-      setError("Test login failed with unexpected error");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+
 
   const handleTwoFactorVerified = async () => {
     setSuccess("Login successful! Redirecting to dashboard...");
@@ -368,19 +353,7 @@ const Login: React.FC = () => {
               )}
             </button>
 
-            {/* Test Login Button */}
-            <button
-              type="button"
-              onClick={testLogin}
-              disabled={isSubmitting}
-              className="w-full mt-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white py-3 px-4 rounded-lg font-semibold hover:from-green-700 hover:to-emerald-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all duration-300 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? (
-                <LoadingSpinner size="sm" />
-              ) : (
-                <span>🧪 Test Login</span>
-              )}
-            </button>
+
             </form>
 
             {/* Contact Link */}

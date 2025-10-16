@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, Plus, Edit3, Trash2, Users, Check, X } from 'lucide-react';
+import { Shield, Plus, Edit3, Trash2, Users, Check } from 'lucide-react';
 import { PermissionGroup, PermissionItem } from '../../types';
 
 interface PermissionGroupsProps {

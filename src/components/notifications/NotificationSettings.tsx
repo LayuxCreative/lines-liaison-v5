@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNotifications } from "./NotificationManager";
+import { useNotifications } from "../../hooks/useNotifications";
 import { NotificationCategory, NotificationPriority } from "../../types";
 import { activityLogger } from "../../utils/activityLogger";
 
@@ -14,7 +14,7 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({
   const [settings, setSettings] = useState(state.settings);
   const [hasChanges, setHasChanges] = useState(false);
 
-  const handleSettingChange = (key: string, value: any) => {
+  const handleSettingChange = <K extends keyof typeof settings>(key: K, value: typeof settings[K]) => {
     const newSettings = { ...settings, [key]: value };
     setSettings(newSettings);
     setHasChanges(true);
@@ -117,6 +117,8 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({
     { key: "medium", label: "Medium", color: "text-yellow-600" },
     { key: "low", label: "Low", color: "text-green-600" },
   ];
+  // Note: priorities are not used in the current UI; removing to avoid unused vars warnings
+  void priorities;
 
   return (
     <div className="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow-lg">

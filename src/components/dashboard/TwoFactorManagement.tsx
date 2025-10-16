@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Shield, ShieldCheck, AlertTriangle, Settings } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { useNotifications } from "../../hooks/useNotifications";
 import { supabaseService } from '../../services/supabaseService';
 import TwoFactorSetup from './TwoFactorSetup';

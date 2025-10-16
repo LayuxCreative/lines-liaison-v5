@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { User } from '../types';
 
@@ -30,7 +30,7 @@ export const useUserProfiles = (options: UseUserProfilesOptions = {}): UseUserPr
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -65,7 +65,7 @@ export const useUserProfiles = (options: UseUserProfilesOptions = {}): UseUserPr
     } finally {
       setLoading(false);
     }
-  };
+  }, [excludeCurrentUser, currentUserId, includeOffline]);
 
   useEffect(() => {
     fetchUsers();
@@ -108,7 +108,7 @@ export const useUserProfiles = (options: UseUserProfilesOptions = {}): UseUserPr
         subscription.unsubscribe();
       };
     }
-  }, [excludeCurrentUser, currentUserId, includeOffline, realtime]);
+  }, [fetchUsers, realtime, excludeCurrentUser, currentUserId]);
 
   // Count online users based on is_online field or status
   const onlineCount = users.filter(user => 

@@ -22,21 +22,22 @@ const UnsplashTest: React.FC = () => {
       }
 
       const testImage = searchResult.results[0];
-
-      // Test 2: Download photo
-      setStatus('Downloading photo...');
-      await unsplashService.downloadPhoto(testImage.urls.regular);
-
-      // Test 3: Upload to Supabase
-      setStatus('Uploading to Supabase...');
-      const uploadResult = await imageStorageService.uploadFromUnsplash(testImage, 'admin-user');
-
-      if (uploadResult.success) {
-        setImageUrl(uploadResult.url!);
-        setStatus('Success!');
-      } else {
-        throw new Error(uploadResult.error || 'Upload failed');
+      if (!testImage) {
+        throw new Error('No photo available in search results');
       }
+
+      // Test 2: Download photo as Blob
+      setStatus('Downloading photo...');
+      const blob = await unsplashService.downloadPhoto(testImage.urls.regular);
+
+      // Test 3: Upload to Supabase via uploadImage
+      setStatus('Uploading to Supabase...');
+      const filename = unsplashService.generateFileName(testImage);
+      const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
+      const uploadResult = await imageStorageService.uploadImage(file, 'files', 'avatars/admin-user/');
+
+      setImageUrl(uploadResult.url);
+      setStatus('Success!');
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');

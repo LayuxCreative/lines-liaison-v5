@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, Tag, AlertCircle, Plus } from 'lucide-react';
 import { User } from '../../types';
-import { useData } from '../../contexts/DataContext';
-import { useAuth } from '../../contexts/AuthContext';
+import { useData } from '../../hooks/useData';
+import { useAuth } from '../../hooks/useAuth';
 import { useNotifications } from "../../hooks/useNotifications";
 import { supabaseService } from '../../services/supabaseService';
 

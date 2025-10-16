@@ -1,5 +1,5 @@
 // Layout Components - Page structure and navigation
-import React from 'react';
+import type { ReactNode } from 'react';
 
 // Header Component Types
 export interface HeaderProps {
@@ -38,20 +38,20 @@ export interface FooterProps {
 
 // Layout Container Types
 export interface LayoutProps {
-  children: React.ReactNode;
-  header?: React.ReactNode;
-  sidebar?: React.ReactNode;
-  footer?: React.ReactNode;
+  children: ReactNode;
+  header?: ReactNode;
+  sidebar?: ReactNode;
+  footer?: ReactNode;
   className?: string;
 }
 
 // Page Container Types
 export interface PageContainerProps {
-  children: React.ReactNode;
+  children: ReactNode;
   title?: string;
   description?: string;
   breadcrumbs?: BreadcrumbItem[];
-  actions?: React.ReactNode;
+  actions?: ReactNode;
   className?: string;
 }
 
@@ -63,7 +63,7 @@ export interface BreadcrumbItem {
 
 // Grid Layout Types
 export interface GridLayoutProps {
-  children: React.ReactNode;
+  children: ReactNode;
   columns?: 1 | 2 | 3 | 4 | 6 | 12;
   gap?: 'sm' | 'md' | 'lg';
   className?: string;

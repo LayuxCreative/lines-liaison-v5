@@ -37,7 +37,7 @@ const SupabaseTestPage: React.FC = () => {
             <div className="bg-white/5 rounded-lg p-4">
               <p className="text-gray-300 mb-1">Supabase URL:</p>
               <p className="text-green-400 font-mono text-xs break-all">
-                https://ymstntjoewkyissepjbc.supabase.co
+                {import.meta.env.VITE_SUPABASE_URL || 'NOT CONFIGURED'}
               </p>
             </div>
             <div className="bg-white/5 rounded-lg p-4">

@@ -9,7 +9,7 @@ import {
   Twitter,
   Globe,
 } from "lucide-react";
-import { useAuth } from "../../contexts/AuthContext";
+import { useAuth } from "../../hooks/useAuth";
 
 const Footer: React.FC = () => {
   const { user } = useAuth();

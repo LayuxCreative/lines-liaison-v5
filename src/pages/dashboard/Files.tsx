@@ -20,12 +20,13 @@ import {
   Archive,
   Building2,
 } from "lucide-react";
-import { useAuth } from "../../contexts/AuthContext";
-import { useData } from "../../contexts/DataContext";
+import { useAuth } from "../../hooks/useAuth";
+import { useData } from "../../hooks/useData";
 import { ProjectFile } from "../../types";
 import FileViewer from "../../components/dashboard/FileViewer";
 // Removed simpleFileUploadService - using Supabase Storage instead
-import SimpleToast, { useToast } from "../../components/common/SimpleToast";
+import SimpleToast from "../../components/common/SimpleToast";
+import { useToast } from "../../hooks/useToast";
 import { formatDistanceToNow } from "date-fns";
 // import { backendApiService } from "../../services/backendApiService";
 import { FileUploadModal } from "../../components/dashboard/FileUploadModal";

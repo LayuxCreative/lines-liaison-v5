@@ -7,8 +7,8 @@ import {
   CheckCircle,
   AlertCircle,
 } from "lucide-react";
-import { useAuth } from "../../contexts/AuthContext";
-import { useData } from "../../contexts/DataContext";
+import { useAuth } from "../../hooks/useAuth";
+import { useData } from "../../hooks/useData";
 import { useNotifications } from "../../hooks/useNotifications";
 import { activityLogger } from "../../utils/activityLogger";
 import { fileStorageService } from "../../services/storageService";
@@ -16,7 +16,24 @@ import { fileStorageService } from "../../services/storageService";
 interface FileUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onFileUploaded?: (fileData: any) => void;
+  onFileUploaded?: (fileData: FileFooterData) => void;
+}
+
+// Minimal summary type for footer display (matches Files.tsx FooterFileData)
+interface FileFooterData {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  uploadedBy: string;
+  uploadedAt: Date;
+  projectName: string;
+  category: string;
+  viewCount: number;
+  isApproved: boolean;
+  version: number;
+  lastViewedBy?: string;
+  lastViewedAt?: Date;
 }
 
 interface UploadFile {
@@ -57,25 +74,29 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
 
     const files = Array.from(e.dataTransfer.files);
     handleFiles(files);
-  }, []);
+  }, [handleFiles]);
 
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = Array.from(e.target.files || []);
       handleFiles(files);
     },
-    [],
+    [handleFiles],
   );
 
   const handleFiles = useCallback(
     (files: File[]) => {
       if (!selectedProject) {
         addNotification({
-          type: "warning",
+          type: "file_upload",
+          category: "system",
           title: "Project Required",
           message: "Please select a project before uploading files",
           priority: "medium",
-          userId: user?.id || "1",
+          status: "unread",
+          actionRequired: false,
+          userId: user?.id ?? "",
+          metadata: { customData: { reason: "missing_project", hasSelectedProject: !!selectedProject } },
         });
         return;
       }
@@ -94,7 +115,7 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
         realUpload(uploadFile);
       });
     },
-    [selectedProject, addNotification],
+    [selectedProject, addNotification, realUpload, user?.id],
   );
 
   const realUpload = useCallback(
@@ -127,40 +148,8 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
           prev.map((uf) => (uf.id === id ? { ...uf, progress: 90 } : uf)),
         );
 
-        // Create file object
-        const newFile = {
-          name: file.name,
-          type: file.type,
-          size: file.size,
-          url: uploadResult.url,
-          projectId: selectedProject,
-          uploadedBy: user?.id || "1",
-          uploadedAt: new Date(),
-          lastModified: new Date(),
-          lastModifiedBy: user?.id || "1",
-          category: getFileCategory(file.type),
-          isApproved: false,
-          version: 1,
-          description: "",
-          tags: [],
-          activity: [
-            {
-              id: Math.random().toString(36).substr(2, 9),
-              userId: user?.id || "1",
-              userName: user?.name || "Unknown User",
-              action: "upload" as const,
-              timestamp: new Date(),
-              details: "File uploaded to Supabase Storage",
-            },
-          ],
-          versions: [],
-          viewCount: 0,
-          downloadCount: 0,
-          storagePath: uploadResult.path,
-        };
-
-        // Add file to project
-        addProjectFile(selectedProject, newFile);
+        // Add file to project using DataContext signature and await for consistency
+        const convertedFile = await addProjectFile(selectedProject, file);
 
         // Mark as completed
         setUploadFiles((prev) =>
@@ -177,7 +166,7 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
           storageUrl: uploadResult.url
         });
 
-        const uploadedFileData = {
+        const uploadedFileData: FileFooterData = {
           id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
           name: file.name,
           type: file.type,
@@ -193,20 +182,24 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
           version: 1,
           lastViewedBy: undefined,
           lastViewedAt: undefined,
-          url: uploadResult.url,
         };
 
-        // Show success notification
+        // Show success notification (EnhancedNotification)
         addNotification({
-          type: "success",
+          type: "file_upload",
+          category: "work",
           title: "File Uploaded Successfully",
-        message: `${file.name} uploaded to Supabase Storage`,
-          userId: user?.id || "1",
+          message: `${file.name} uploaded to Supabase Storage`,
+          priority: "medium",
+          status: "unread",
+          actionRequired: false,
+          userId: user?.id ?? "",
+          metadata: { projectId: selectedProject, relatedEntityType: 'file', relatedEntityId: (convertedFile?.id ?? uploadedFileData.id), customData: { storageUrl: uploadResult.url, fileName: file.name } },
         });
 
         // Call the callback to show file in footer
         if (onFileUploaded) {
-          onFileUploaded(uploadedFileData);
+          onFileUploaded({ ...uploadedFileData, id: convertedFile?.id ?? uploadedFileData.id });
         }
       } catch (error) {
         console.error("Upload failed:", error);
@@ -232,15 +225,19 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
         );
 
         addNotification({
-          type: "error",
+          type: "file_upload",
+          category: "system",
           title: "Upload Failed",
           message: `Failed to upload ${file.name}`,
           priority: "high",
-          userId: user?.id || "1",
+          status: "unread",
+          actionRequired: false,
+          userId: user?.id ?? "",
+          metadata: { projectId: selectedProject, relatedEntityType: 'file', relatedEntityId: id, customData: { error: (error instanceof Error ? error.message : "Unknown error"), fileName: file.name } },
         });
       }
     },
-    [selectedProject, user, addProjectFile, addNotification],
+    [selectedProject, user, addProjectFile, addNotification, projects, onFileUploaded],
   );
 
   const getFileCategory = (

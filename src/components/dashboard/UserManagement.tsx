@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Users, 
@@ -14,11 +14,10 @@ import {
 } from 'lucide-react';
 import { User, PermissionGroup } from '../../types';
 import { supabaseService } from '../../services/supabaseService';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { useNotifications } from "../../hooks/useNotifications";
 import PermissionGroups from './PermissionGroups';
 import ImageUploader from '../common/ImageUploader';
-import { imageStorageService } from '../../services/storageService';
 import { activityLogger } from '../../utils/activityLogger';
 
 interface UserManagementProps {
@@ -70,12 +69,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
     avatar_url: ''
   });
 
-  // Load data on component mount
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const [usersResponse, groupsResponse] = await Promise.all([
@@ -83,20 +77,47 @@ const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
         supabaseService.getPermissionGroups()
       ]);
       
-      setUsers(usersResponse.data || []);
-      setPermissionGroups(groupsResponse.data || []);
+      if ((usersResponse && !usersResponse.success) || (groupsResponse && !groupsResponse.success)) {
+        addNotification({
+          type: 'system',
+          category: 'system',
+          title: 'Data Load Warning',
+          message: 'Some data failed to load correctly',
+          priority: 'high',
+          status: 'unread',
+          actionRequired: false,
+          userId: user?.id || '',
+          metadata: { customData: { usersSuccess: usersResponse?.success, groupsSuccess: groupsResponse?.success } },
+        });
+      }
+
+      const usersDataRaw = usersResponse?.data as unknown;
+      const groupsDataRaw = groupsResponse?.data as unknown;
+
+      setUsers(Array.isArray(usersDataRaw) ? (usersDataRaw as User[]) : []);
+      setPermissionGroups(Array.isArray(groupsDataRaw) ? (groupsDataRaw as PermissionGroup[]) : []);
     } catch (error) {
       console.error('Error loading data:', error);
       addNotification({
-          type: 'error',
-          title: 'Data Loading Error',
-          message: 'Failed to load users and permission groups data',
-          userId: user?.id || ''
-        });
+        type: 'system',
+        category: 'system',
+        title: 'Data Loading Error',
+        message: 'Failed to load users and permission groups data',
+        priority: 'high',
+        status: 'unread',
+        actionRequired: false,
+        userId: user?.id || '',
+        metadata: { customData: { scope: 'user_management' } },
+      });
     } finally {
       setLoading(false);
     }
-  };
+  }, [addNotification, user?.id]);
+
+  // Load data on component mount
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // Filter and sort users
   const getFilteredAndSortedUsers = () => {
@@ -146,8 +167,28 @@ const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
         status: 'available' as const
       };
       
-      const response = await supabaseService.createUser(userData);
-      const createdUser = response.data;
+      const response = await supabaseService.createUser(userData as Record<string, unknown>);
+      if (!response.success) {
+        const errorMessage = typeof response.error === 'string' ? response.error : 'Failed to create new user';
+        await activityLogger.log("user_create", "error", "Failed to create user", {
+          userRole: newUser.role,
+          error: errorMessage
+        });
+        addNotification({
+          type: 'system',
+          category: 'system',
+          title: 'User Creation Error',
+          message: errorMessage,
+          priority: 'high',
+          status: 'unread',
+          actionRequired: false,
+          userId: user?.id || '',
+          metadata: { customData: { error: errorMessage } },
+        });
+        return;
+      }
+      const data = response.data as unknown;
+      const createdUser = (Array.isArray(data) ? data[0] : data) as User | undefined;
       if (createdUser) {
         setUsers([...users, createdUser]);
         setShowCreateUser(false);
@@ -159,10 +200,15 @@ const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
         });
         
         addNotification({
-          type: 'success',
+          type: 'system',
+          category: 'administrative',
           title: 'User Created',
           message: `User ${newUser.full_name} created successfully`,
-          userId: user?.id || ''
+          priority: 'medium',
+          status: 'unread',
+          actionRequired: false,
+          userId: user?.id || '',
+          metadata: { relatedEntityType: 'user', relatedEntityId: createdUser.id },
         });
       }
     } catch (error) {
@@ -174,10 +220,15 @@ const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
       });
       
       addNotification({
-        type: 'error',
+        type: 'system',
+        category: 'system',
         title: 'User Creation Error',
         message: 'Failed to create new user',
-        userId: user?.id || ''
+        priority: 'high',
+        status: 'unread',
+        actionRequired: false,
+        userId: user?.id || '',
+        metadata: { customData: { error: (error instanceof Error ? error.message : 'Unknown error') } },
       });
     }
   };
@@ -194,8 +245,28 @@ const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
       });
       
       console.log('Calling supabaseService.updateUser...');
-      const response = await supabaseService.updateUser(userId, updates);
-      const updatedUser = response.data;
+      const response = await supabaseService.updateUser(userId, updates as Record<string, unknown>);
+      if (!response.success) {
+        const errorMessage = typeof response.error === 'string' ? response.error : 'Failed to update user data';
+        await activityLogger.log("user_update", "error", "Failed to update user", {
+          userId,
+          error: errorMessage
+        });
+        addNotification({
+          type: 'system',
+          category: 'system',
+          title: 'Update Error',
+          message: errorMessage,
+          priority: 'high',
+          status: 'unread',
+          actionRequired: false,
+          userId: user?.id || '',
+          metadata: { relatedEntityType: 'user', relatedEntityId: userId, customData: { error: errorMessage } },
+        });
+        return;
+      }
+      const respData = response.data as unknown;
+      const updatedUser = (Array.isArray(respData) ? respData[0] : respData) as User | undefined;
       if (updatedUser) {
         console.log('Update successful, result:', updatedUser);
         setUsers(users.map(u => u.id === userId ? updatedUser : u));
@@ -248,19 +319,17 @@ const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
           : 'profile data';
         
         addNotification({
-          type: 'success',
+          type: 'system',
+          category: 'administrative',
           title: 'User Updated',
           message: `Updated ${updatedFieldsText} for ${updatedUser.full_name || updatedUser.email}`,
-          userId: user?.id || ''
+          priority: 'medium',
+          status: 'unread',
+          actionRequired: false,
+          userId: user?.id || '',
+          metadata: { relatedEntityType: 'user', relatedEntityId: userId },
         });
       }
-      
-      addNotification({
-        type: 'success',
-        title: 'User Updated',
-        message: `Updated ${updatedFieldsText} for ${updatedUser.full_name || updatedUser.email}`,
-        userId: user?.id || ''
-      });
     } catch (error) {
       console.error('Error updating user:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to update user data';
@@ -271,10 +340,15 @@ const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
       });
       
       addNotification({
-        type: 'error',
+        type: 'system',
+        category: 'system',
         title: 'Update Error',
         message: errorMessage,
-        userId: user?.id || ''
+        priority: 'high',
+        status: 'unread',
+        actionRequired: false,
+        userId: user?.id || '',
+        metadata: { relatedEntityType: 'user', relatedEntityId: userId, customData: { error: errorMessage } },
       });
     }
   };
@@ -285,18 +359,28 @@ const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
       await handleUpdateUser(userId, { avatar_url: avatarUrl });
       
       addNotification({
-        type: 'success',
+        type: 'system',
+        category: 'work',
         title: 'Avatar Updated',
         message: 'Profile picture updated successfully',
-        userId: user?.id || ''
+        priority: 'medium',
+        status: 'unread',
+        actionRequired: false,
+        userId: user?.id || '',
+        metadata: { relatedEntityType: 'user', relatedEntityId: userId },
       });
     } catch (error) {
       console.error('Error updating avatar:', error);
       addNotification({
-        type: 'error',
+        type: 'system',
+        category: 'system',
         title: 'Avatar Update Error',
         message: 'Failed to update profile picture',
-        userId: user?.id || ''
+        priority: 'high',
+        status: 'unread',
+        actionRequired: false,
+        userId: user?.id || '',
+        metadata: { relatedEntityType: 'user', relatedEntityId: userId, customData: { error: (error instanceof Error ? error.message : 'Unknown error') } },
       });
     }
   };
@@ -652,9 +736,9 @@ const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
               
               <div className="p-6">
                 <ImageUploader
-                   currentImageUrl={users.find(u => u.id === showImageUploader)?.avatar_url}
+                   currentImageUrl={users.find(u => u.id === showImageUploader)?.avatar_url || ""}
                    onImageUpload={(result) => {
-                     if (showImageUploader && result.success && result.url) {
+                     if (showImageUploader && result.url) {
                        handleUpdateAvatar(showImageUploader, result.url);
                        setShowImageUploader(null);
                      }
@@ -704,7 +788,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
                   <div className="flex flex-col items-center mb-8">
                     <div className="relative mb-4">
                       <ImageUploader
-                        currentImageUrl={newUser.avatar_url}
+                        currentImageUrl={newUser.avatar_url || ""}
                         onImageUpload={(result) => setNewUser(prev => ({ ...prev, avatar_url: result.url }))}
                         userId={editingUser?.id || 'new-user'}
                         size="lg"
@@ -884,31 +968,24 @@ const UserManagement: React.FC<UserManagementProps> = ({ onClose }) => {
                     </button>
                     <button
                       onClick={editingUser ? () => {
-                        console.log('Update button clicked with data:', {
-                          userId: editingUser.id,
-                          updates: {
-                            full_name: newUser.full_name,
-                            email: newUser.email,
-                            role: newUser.role,
-                            company: newUser.company,
-                            department: newUser.department,
-                            position: newUser.position,
-                            phone: newUser.phone,
-                            additionalPermissions: newUser.additionalPermissions,
-                            avatar_url: newUser.avatar_url
-                          }
-                        });
-                        handleUpdateUser(editingUser.id, {
+                        const updates: Partial<User> = {
                           full_name: newUser.full_name,
                           email: newUser.email,
                           role: newUser.role,
-                          company: newUser.company,
-                          department: newUser.department,
-                          position: newUser.position,
-                          phone: newUser.phone,
-                          additionalPermissions: newUser.additionalPermissions,
-                          avatar_url: newUser.avatar_url
+                        };
+                        if (newUser.company !== undefined) updates.company = newUser.company;
+                        if (newUser.department !== undefined) updates.department = newUser.department;
+                        if (newUser.position !== undefined) updates.position = newUser.position;
+                        if (newUser.phone !== undefined) updates.phone = newUser.phone;
+                        if (newUser.additionalPermissions !== undefined) updates.additionalPermissions = newUser.additionalPermissions;
+                        if (typeof newUser.avatar_url === 'string' && newUser.avatar_url.trim() !== '') {
+                          updates.avatar_url = newUser.avatar_url;
+                        }
+                        console.log('Update button clicked with data:', {
+                          userId: editingUser.id,
+                          updates
                         });
+                        handleUpdateUser(editingUser.id, updates);
                       } : handleCreateUser}
                       className="flex-1 sm:flex-none px-6 py-2.5 bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-700 hover:to-teal-700 text-white rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl font-medium flex items-center justify-center gap-2"
                     >

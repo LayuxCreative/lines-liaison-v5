@@ -18,7 +18,7 @@ import {
 import { ProjectFile } from "../../types";
 
 interface FileViewerProps {
-  file: (ProjectFile & { [key: string]: any }) | null;
+  file: ProjectFile | null;
   isOpen: boolean;
   onClose: () => void;
 }

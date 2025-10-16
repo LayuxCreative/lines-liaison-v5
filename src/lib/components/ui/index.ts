@@ -1,5 +1,5 @@
 // UI Components - Reusable interface elements
-import React from 'react';
+import type { ReactNode } from 'react';
 
 // Button Component Types
 export interface ButtonProps {
@@ -7,7 +7,7 @@ export interface ButtonProps {
   size?: 'sm' | 'md' | 'lg';
   disabled?: boolean;
   loading?: boolean;
-  children: React.ReactNode;
+  children: ReactNode;
   onClick?: () => void;
   className?: string;
 }
@@ -29,20 +29,20 @@ export interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   title?: string;
-  children: React.ReactNode;
+  children: ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
 // Card Component Types
 export interface CardProps {
-  children: React.ReactNode;
+  children: ReactNode;
   className?: string;
   padding?: 'sm' | 'md' | 'lg';
 }
 
 // Badge Component Types
 export interface BadgeProps {
-  children: React.ReactNode;
+  children: ReactNode;
   variant?: 'default' | 'success' | 'warning' | 'danger' | 'info';
   size?: 'sm' | 'md';
 }

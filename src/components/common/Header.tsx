@@ -12,7 +12,7 @@ import {
   Building2,
   ChevronDown,
 } from "lucide-react";
-import { useAuth } from "../../contexts/AuthContext";
+import { useAuth } from "../../hooks/useAuth";
 import { useNotifications } from "../../hooks/useNotifications";
 import NotificationDropdown from "./NotificationDropdown";
 import GlobalSearch from "./GlobalSearch";

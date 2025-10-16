@@ -1,0 +1,80 @@
+[0m[0m
+[0m[4m/Users/layouts/Documents/L&/lines liaison New/lines-liaison-V5/src/components/auth/EmailConfirmation.tsx[24m[0m
+[0m  [2m50:6[22m  [33mwarning[39m  React Hook useEffect has a missing dependency: 'confirmEmail'. Either include it or remove the dependency array  [2mreact-hooks/exhaustive-deps[22m[0m
+[0m[0m
+[0m[4m/Users/layouts/Documents/L&/lines liaison New/lines-liaison-V5/src/components/communication/CallManager.tsx[24m[0m
+[0m  [2m175:6[22m  [33mwarning[39m  React Hook useEffect has a missing dependency: 'endCall'. Either include it or remove the dependency array                                                             [2mreact-hooks/exhaustive-deps[22m[0m
+[0m  [2m331:6[22m  [33mwarning[39m  React Hook useCallback has unnecessary dependencies: 'callState', 'localStream', 'onCallEnd', and 'stopCallTimer'. Either exclude them or remove the dependency array  [2mreact-hooks/exhaustive-deps[22m[0m
+[0m[0m
+[0m[4m/Users/layouts/Documents/L&/lines liaison New/lines-liaison-V5/src/components/communication/CallWindow.tsx[24m[0m
+[0m   [2m86:6[22m  [33mwarning[39m  React Hook useEffect has missing dependencies: 'currentUser.id' and 'currentUser.name'. Either include them or remove the dependency array        [2mreact-hooks/exhaustive-deps[22m[0m
+[0m  [2m105:6[22m  [33mwarning[39m  React Hook useCallback has unnecessary dependencies: 'currentUser.id' and 'currentUser.name'. Either exclude them or remove the dependency array  [2mreact-hooks/exhaustive-deps[22m[0m
+[0m  [2m120:6[22m  [33mwarning[39m  React Hook useCallback has unnecessary dependencies: 'currentUser.id' and 'currentUser.name'. Either exclude them or remove the dependency array  [2mreact-hooks/exhaustive-deps[22m[0m
+[0m[0m
+[0m[4m/Users/layouts/Documents/L&/lines liaison New/lines-liaison-V5/src/components/dashboard/CreateRoleModal.tsx[24m[0m
+[0m  [2m51:9[22m  [33mwarning[39m  The 'loadPermissions' function makes the dependencies of useEffect Hook (at line 30) change on every render. Move it inside the useEffect callback. Alternatively, wrap the definition of 'loadPermissions' in its own useCallback() Hook  [2mreact-hooks/exhaustive-deps[22m[0m
+[0m[0m
+[0m[4m/Users/layouts/Documents/L&/lines liaison New/lines-liaison-V5/src/components/dashboard/FileUploadModal.tsx[24m[0m
+[0m   [2m77:6[22m  [33mwarning[39m  React Hook useCallback has a missing dependency: 'handleFiles'. Either include it or remove the dependency array                                                                                                                                                [2mreact-hooks/exhaustive-deps[22m[0m
+[0m   [2m84:5[22m  [33mwarning[39m  React Hook useCallback has a missing dependency: 'handleFiles'. Either include it or remove the dependency array                                                                                                                                                [2mreact-hooks/exhaustive-deps[22m[0m
+[0m  [2m114:5[22m  [33mwarning[39m  React Hook useCallback has missing dependencies: 'realUpload' and 'user?.id'. Either include them or remove the dependency array                                                                                                                                [2mreact-hooks/exhaustive-deps[22m[0m
+[0m  [2m259:5[22m  [33mwarning[39m  React Hook useCallback has missing dependencies: 'onFileUploaded' and 'projects'. Either include them or remove the dependency array. If 'onFileUploaded' changes too often, find the parent component that defines it and wrap that definition in useCallback  [2mreact-hooks/exhaustive-deps[22m[0m
+[0m[0m
+[0m[4m/Users/layouts/Documents/L&/lines liaison New/lines-liaison-V5/src/components/dashboard/PermissionGroups.tsx[24m[0m
+[0m  [2m2:53[22m  [31merror[39m  'X' is defined but never used  [2m@typescript-eslint/no-unused-vars[22m[0m
+[0m[0m
+[0m[4m/Users/layouts/Documents/L&/lines liaison New/lines-liaison-V5/src/components/dashboard/SecuritySettings.tsx[24m[0m
+[0m    [2m2:29[22m  [31merror[39m  'AlertTriangle' is defined but never used                       [2m@typescript-eslint/no-unused-vars[22m[0m
+[0m    [2m4:10[22m  [31merror[39m  'useAuth' is defined but never used                             [2m@typescript-eslint/no-unused-vars[22m[0m
+[0m    [2m5:10[22m  [31merror[39m  'supabaseService' is defined but never used                     [2m@typescript-eslint/no-unused-vars[22m[0m
+[0m   [2m81:7[22m   [31merror[39m  'PasswordStrengthIndicator' is assigned a value but never used  [2m@typescript-eslint/no-unused-vars[22m[0m
+[0m  [2m147:10[22m  [31merror[39m  'passwordStrength' is assigned a value but never used           [2m@typescript-eslint/no-unused-vars[22m[0m
+[0m[0m
+[0m[4m/Users/layouts/Documents/L&/lines liaison New/lines-liaison-V5/src/components/dashboard/TwoFactorSetup.tsx[24m[0m
+[0m  [2m26:6[22m  [33mwarning[39m  React Hook useEffect has a missing dependency: 'generateSetup'. Either include it or remove the dependency array  [2mreact-hooks/exhaustive-deps[22m[0m
+[0m[0m
+[0m[4m/Users/layouts/Documents/L&/lines liaison New/lines-liaison-V5/src/components/dashboard/UserManagement.tsx[24m[0m
+[0m  [2m21:10[22m  [31merror[39m    'imageStorageService' is defined but never used                                                              [2m@typescript-eslint/no-unused-vars[22m[0m
+[0m  [2m76:6[22m   [33mwarning[39m  React Hook useEffect has a missing dependency: 'loadData'. Either include it or remove the dependency array  [2mreact-hooks/exhaustive-deps[22m[0m
+[0m[0m
+[0m[4m/Users/layouts/Documents/L&/lines liaison New/lines-liaison-V5/src/components/notifications/NotificationBadge.tsx[24m[0m
+[0m  [2m2:32[22m  [31merror[39m  'NotificationPriority' is defined but never used  [2m@typescript-eslint/no-unused-vars[22m[0m
+[0m[0m
+[0m[4m/Users/layouts/Documents/L&/lines liaison New/lines-liaison-V5/src/components/notifications/NotificationManager.tsx[24m[0m
+[0m  [2m288:14[22m  [33mwarning[39m  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  [2mreact-refresh/only-export-components[22m[0m
+[0m[0m
+[0m[4m/Users/layouts/Documents/L&/lines liaison New/lines-liaison-V5/src/components/notifications/NotificationProvider.tsx[24m[0m
+[0m  [2m416:14[22m  [33mwarning[39m  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  [2mreact-refresh/only-export-components[22m[0m
+[0m  [2m427:14[22m  [33mwarning[39m  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  [2mreact-refresh/only-export-components[22m[0m
+[0m  [2m437:14[22m  [33mwarning[39m  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  [2mreact-refresh/only-export-components[22m[0m
+[0m  [2m447:14[22m  [33mwarning[39m  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  [2mreact-refresh/only-export-components[22m[0m
+[0m  [2m453:14[22m  [33mwarning[39m  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  [2mreact-refresh/only-export-components[22m[0m
+[0m[0m
+[0m[4m/Users/layouts/Documents/L&/lines liaison New/lines-liaison-V5/src/components/notifications/NotificationSettings.tsx[24m[0m
+[0m  [2m110:9[22m  [31merror[39m  'priorities' is assigned a value but never used  [2m@typescript-eslint/no-unused-vars[22m[0m
+[0m[0m
+[0m[4m/Users/layouts/Documents/L&/lines liaison New/lines-liaison-V5/src/components/notifications/NotificationToast.tsx[24m[0m
+[0m  [2m39:6[22m  [33mwarning[39m  React Hook useEffect has a missing dependency: 'handleClose'. Either include it or remove the dependency array  [2mreact-hooks/exhaustive-deps[22m[0m
+[0m[0m
+[0m[4m/Users/layouts/Documents/L&/lines liaison New/lines-liaison-V5/src/components/permissions/PermissionGuard.tsx[24m[0m
+[0m   [2m33:3[22m   [31merror[39m    'user' is defined but never used                                                                                                [2m@typescript-eslint/no-unused-vars[22m[0m
+[0m  [2m142:14[22m  [33mwarning[39m  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  [2mreact-refresh/only-export-components[22m[0m
+[0m  [2m151:14[22m  [33mwarning[39m  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  [2mreact-refresh/only-export-components[22m[0m
+[0m  [2m309:14[22m  [33mwarning[39m  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  [2mreact-refresh/only-export-components[22m[0m
+[0m  [2m338:14[22m  [33mwarning[39m  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  [2mreact-refresh/only-export-components[22m[0m
+[0m[0m
+[0m[4m/Users/layouts/Documents/L&/lines liaison New/lines-liaison-V5/src/components/permissions/RoleManager.tsx[24m[0m
+[0m  [2m48:6[22m  [33mwarning[39m  React Hook useEffect has a missing dependency: 'loadRoles'. Either include it or remove the dependency array  [2mreact-hooks/exhaustive-deps[22m[0m
+[0m[0m
+[0m[4m/Users/layouts/Documents/L&/lines liaison New/lines-liaison-V5/src/contexts/DataContext.tsx[24m[0m
+[0m  [2m277:6[22m  [33mwarning[39m  React Hook useEffect has missing dependencies: 'loadProjects' and 'user'. Either include them or remove the dependency array  [2mreact-hooks/exhaustive-deps[22m[0m
+[0m[0m
+[0m[4m/Users/layouts/Documents/L&/lines liaison New/lines-liaison-V5/src/hooks/useSupabaseData.ts[24m[0m
+[0m  [2m87:6[22m   [33mwarning[39m  React Hook useEffect has a missing dependency: 'fetchData'. Either include it or remove the dependency array                              [2mreact-hooks/exhaustive-deps[22m[0m
+[0m  [2m87:18[22m  [33mwarning[39m  React Hook useEffect has a complex expression in the dependency array. Extract it to a separate variable so it can be statically checked  [2mreact-hooks/exhaustive-deps[22m[0m
+[0m[0m
+[0m[4m/Users/layouts/Documents/L&/lines liaison New/lines-liaison-V5/src/hooks/useUserProfiles.ts[24m[0m
+[0m  [2m111:6[22m  [33mwarning[39m  React Hook useEffect has a missing dependency: 'fetchUsers'. Either include it or remove the dependency array  [2mreact-hooks/exhaustive-deps[22m[0m
+[0m[0m
+[0m[31m[1m✖ 39 problems (10 errors, 29 warnings)[22m[39m[0m
+[0m[31m[1m[22m[39m[0m

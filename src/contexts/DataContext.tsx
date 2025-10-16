@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Project, ProjectFile, Message, Task } from "../types";
 import { supabaseService } from "../services/supabaseService";
-import { useAuth } from "./AuthContext";
+import { useAuth } from "../hooks/useAuth";
+import { DataContext, DataContextType } from './DataContextBase';
 
 // Import FileData interface from backendApiService
 interface FileData {
@@ -12,27 +13,7 @@ interface FileData {
   type: string;
 }
 
-interface DataContextType {
-  projects: Project[];
-  files: ProjectFile[];
-  messages: Message[];
-  tasks: Task[];
-  loadProjects: (userId?: string) => Promise<void>;
-  loadFiles: (projectId: string) => Promise<void>;
-  loadTasks: () => Promise<void>;
-  loadMessages: () => Promise<void>;
-  addProject: (project: Omit<Project, "id" | "createdAt">) => Promise<void>;
-  updateProject: (id: string, updates: Partial<Project>) => void;
-  addProjectFile: (projectId: string, file: File) => Promise<ProjectFile | undefined>;
-  addMessage: (message: Omit<Message, "id" | "timestamp">) => Promise<void>;
-  addTask: (task: Omit<Task, "id" | "createdAt">) => Promise<void>;
-  updateTask: (id: string, updates: Partial<Task>) => void;
-  getProjectsByUser: (userId: string, userRole: string) => Project[];
-  getTasksByProject: (projectId: string) => Task[];
-  getTasksByUser: (userId: string, userRole: string) => Task[];
-}
-
-const DataContext = createContext<DataContextType | undefined>(undefined);
+// Context and types are defined in DataContextBase to keep this file exporting only components
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
@@ -41,7 +22,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [messages, setMessages] = useState<Message[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
 
-  const loadProjects = async (userId?: string) => {
+  const loadProjects = useCallback(async (userId?: string) => {
     try {
       const targetUserId = userId || user?.id;
       if (!targetUserId) {
@@ -65,7 +46,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('DataContext: Error loading projects:', error);
       setProjects([]);
     }
-  };
+  }, [user?.id]);
 
   const loadFiles = async (projectId: string) => {
     try {
@@ -107,7 +88,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const loadTasks = async () => {
+  const loadTasks = useCallback(async () => {
     try {
       console.log('DataContext: Loading tasks...');
       const response = await supabaseService.getTasks();
@@ -126,9 +107,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('DataContext: Error loading tasks:', error);
       setTasks([]);
     }
-  };
+  }, []);
 
-  const loadMessages = async () => {
+  const loadMessages = useCallback(async () => {
     try {
       console.log('DataContext: Loading messages...');
       const response = await supabaseService.getMessages();
@@ -147,7 +128,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('DataContext: Error loading messages:', error);
       setMessages([]);
     }
-  };
+  }, []);
 
   const addProject = async (projectData: Omit<Project, "id" | "createdAt">) => {
     try {
@@ -282,7 +263,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('DataContext: Loading data for user:', user.id);
       try {
         await Promise.all([
-          loadProjects(user.id),
+          loadProjects(),
           loadTasks(),
           loadMessages()
         ]);
@@ -293,7 +274,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     loadInitialData();
-  }, [user?.id]);
+  }, [user, loadProjects, loadTasks, loadMessages]);
 
   const value: DataContextType = {
     projects,
@@ -318,10 +299,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 };
 
-export const useData = () => {
-  const context = useContext(DataContext);
-  if (context === undefined) {
-    throw new Error("useData must be used within a DataProvider");
-  }
-  return context;
-};
+// Hook moved to src/hooks/useData.ts to improve React Fast Refresh compliance
+
+// Export the context so hooks in src/hooks can consume it
+// Context is exported from DataContextBase; avoid exporting here to satisfy react-refresh rule

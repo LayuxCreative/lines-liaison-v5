@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { CheckCircle, XCircle, Mail, RefreshCw } from 'lucide-react';
@@ -12,7 +12,7 @@ const EmailConfirmation: React.FC = () => {
   const [email, setEmail] = useState('');
   const [isResending, setIsResending] = useState(false);
 
-  const confirmEmail = async (token: string, type: string) => {
+  const confirmEmail = useCallback(async (token: string, type: string) => {
     try {
       const validType = type as 'signup' | 'email_change' | 'recovery';
       const response = await supabaseService.confirmEmail(token, validType);
@@ -30,7 +30,7 @@ const EmailConfirmation: React.FC = () => {
       setStatus('error');
       setMessage('An error occurred while confirming email');
     }
-  };
+  }, [navigate]);
 
   useEffect(() => {
     const token = searchParams.get('token');
@@ -47,7 +47,7 @@ const EmailConfirmation: React.FC = () => {
       setStatus('resend');
       setMessage('Confirmation code not found. Please resend confirmation email.');
     }
-  }, [searchParams, navigate]);
+  }, [searchParams, navigate, confirmEmail]);
 
   const handleResendConfirmation = async () => {
     if (!email) {

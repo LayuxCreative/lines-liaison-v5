@@ -1,9 +1,9 @@
-import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import React, { createContext, useReducer, useEffect, ReactNode } from 'react';
 import { supabaseService } from '../../services/supabaseService';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 
 // Types
-export interface Notification {
+interface Notification {
   id: string;
   title: string;
   message: string;
@@ -18,7 +18,7 @@ export interface Notification {
   metadata?: Record<string, unknown>;
 }
 
-export interface NotificationState {
+interface NotificationState {
   notifications: Notification[];
   isLoading: boolean;
   error: string | null;
@@ -30,7 +30,7 @@ export interface NotificationState {
   };
 }
 
-export type NotificationAction =
+type NotificationAction =
   | { type: 'SET_NOTIFICATIONS'; payload: Notification[] }
   | { type: 'ADD_NOTIFICATION'; payload: Omit<Notification, 'id' | 'createdAt' | 'updatedAt' | 'isRead'> }
   | { type: 'UPDATE_NOTIFICATION'; payload: Partial<Notification> & { id: string } }
@@ -234,22 +234,19 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
   useEffect(() => {
     if (!user) return;
 
-    let subscription: any = null;
+    let subscription: { id: string } | null = null;
 
     const setupSubscription = async () => {
       try {
         subscription = await supabaseService.subscribeToNotifications(
           user.id,
-          (payload: any) => {
-            if (payload.eventType === 'INSERT') {
-              const newNotification = payload.new as Notification;
-              dispatch({ type: 'ADD_NOTIFICATION', payload: newNotification });
-            } else if (payload.eventType === 'UPDATE') {
-              const updatedNotification = payload.new as Notification;
-              dispatch({ type: 'UPDATE_NOTIFICATION', payload: updatedNotification });
-            } else if (payload.eventType === 'DELETE') {
-              const deletedNotification = payload.old as Notification;
-              dispatch({ type: 'DELETE_NOTIFICATION', payload: { id: deletedNotification.id } });
+          (payload: { eventType: 'INSERT' | 'UPDATE' | 'DELETE'; new?: Notification; old?: Notification }) => {
+            if (payload.eventType === 'INSERT' && payload.new) {
+              dispatch({ type: 'ADD_NOTIFICATION', payload: payload.new });
+            } else if (payload.eventType === 'UPDATE' && payload.new) {
+              dispatch({ type: 'UPDATE_NOTIFICATION', payload: payload.new });
+            } else if (payload.eventType === 'DELETE' && payload.old) {
+              dispatch({ type: 'DELETE_NOTIFICATION', payload: { id: payload.old.id } });
             }
           }
         );
@@ -287,13 +284,6 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
   );
 };
 
-// Hook
-export const useNotifications = () => {
-  const context = useContext(NotificationContext);
-  if (!context) {
-    throw new Error('useNotifications must be used within a NotificationProvider');
-  }
-  return context;
-};
+// Removed non-component hook export to comply with react-refresh rules
 
 export default NotificationProvider;

@@ -9,8 +9,8 @@ import {
   FileCheck,
   Search,
 } from "lucide-react";
-import { useAuth } from "../../contexts/AuthContext";
-import { useData } from "../../contexts/DataContext";
+import { useAuth } from "../../hooks/useAuth";
+import { useData } from "../../hooks/useData";
 
 const Contracts: React.FC = () => {
   const { user } = useAuth();

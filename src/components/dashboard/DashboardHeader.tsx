@@ -36,7 +36,7 @@ import {
   FileCheck,
   Shield,
 } from "lucide-react";
-import { useAuth } from "../../contexts/AuthContext";
+import { useAuth } from "../../hooks/useAuth";
 import { useNotifications } from "../../hooks/useNotifications";
 import NotificationDropdown from "../common/NotificationDropdown";
 import GlobalSearch from "../common/GlobalSearch";

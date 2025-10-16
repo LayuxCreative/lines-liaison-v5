@@ -42,12 +42,7 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
     permissions: [] as Permission[],
   });
 
-  // Load roles from Supabase
-  useEffect(() => {
-    loadRoles();
-  }, []);
-
-  const loadRoles = async () => {
+  const loadRoles = useCallback(async () => {
     try {
       setIsLoadingRoles(true);
       const response = await supabaseService.getRoles();
@@ -69,7 +64,12 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
     } finally {
       setIsLoadingRoles(false);
     }
-  };
+  }, [addNotification, currentUser.id]);
+
+  // Load roles from Supabase
+  useEffect(() => {
+    loadRoles();
+  }, [loadRoles]);
 
   const filteredRoles = roles.filter(
     (role) =>

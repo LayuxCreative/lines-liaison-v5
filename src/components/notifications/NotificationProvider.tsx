@@ -1,10 +1,4 @@
-import React, {
-  createContext,
-  useContext,
-  useReducer,
-  useEffect,
-  useCallback,
-} from "react";
+import React, { createContext, useReducer, useEffect, useCallback } from "react";
 import {
   EnhancedNotification,
   NotificationSettings,
@@ -413,57 +407,4 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
 };
 
 // Hook to use notification context
-export const useNotifications = (): NotificationContextType => {
-  const context = useContext(NotificationContext);
-  if (context === undefined) {
-    throw new Error(
-      "useNotifications must be used within a NotificationProvider",
-    );
-  }
-  return context;
-};
-
-// Hook for toast notifications specifically
-export const useToastNotifications = () => {
-  const { state, removeToast } = useNotifications();
-
-  return {
-    toasts: state.toastNotifications,
-    removeToast,
-  };
-};
-
-// Hook for notification settings
-export const useNotificationSettings = () => {
-  const { state, updateSettings } = useNotifications();
-
-  return {
-    settings: state.settings,
-    updateSettings,
-  };
-};
-
-// Hook for unread notifications count
-export const useUnreadCount = () => {
-  const { state } = useNotifications();
-  return state.unreadCount;
-};
-
-// Custom hook for notification actions
-export const useNotificationActions = () => {
-  const {
-    addNotification,
-    markAsRead,
-    markAllAsRead,
-    deleteNotification,
-    showToast,
-  } = useNotifications();
-
-  return {
-    addNotification,
-    markAsRead,
-    markAllAsRead,
-    deleteNotification,
-    showToast,
-  };
-};
+// Removed non-component hook exports to comply with react-refresh rules

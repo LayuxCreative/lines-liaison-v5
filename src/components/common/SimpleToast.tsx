@@ -1,14 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CheckCircle, AlertCircle, X, Info } from "lucide-react";
-
-export interface ToastMessage {
-  id: string;
-  type: "success" | "error" | "info";
-  title: string;
-  message?: string;
-  duration?: number;
-}
+import { ToastMessage } from "../../lib/types";
 
 interface SimpleToastProps {
   messages: ToastMessage[];
@@ -116,41 +109,6 @@ export const SimpleToast: React.FC<SimpleToastProps> = ({
       </AnimatePresence>
     </div>
   );
-};
-
-// Hook for managing toast messages
-export const useToast = () => {
-  const [messages, setMessages] = useState<ToastMessage[]>([]);
-
-  const addToast = (toast: Omit<ToastMessage, "id">) => {
-    const id = Date.now().toString() + Math.random().toString(36).substr(2);
-    setMessages((prev) => [...prev, { ...toast, id }]);
-  };
-
-  const removeToast = (id: string) => {
-    setMessages((prev) => prev.filter((msg) => msg.id !== id));
-  };
-
-  const showSuccess = (title: string, message?: string, duration?: number) => {
-    addToast({ type: "success", title, message, duration });
-  };
-
-  const showError = (title: string, message?: string, duration?: number) => {
-    addToast({ type: "error", title, message, duration });
-  };
-
-  const showInfo = (title: string, message?: string, duration?: number) => {
-    addToast({ type: "info", title, message, duration });
-  };
-
-  return {
-    messages,
-    addToast,
-    removeToast,
-    showSuccess,
-    showError,
-    showInfo,
-  };
 };
 
 export default SimpleToast;

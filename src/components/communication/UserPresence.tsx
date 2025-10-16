@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Users, Clock } from "lucide-react";
-import { useAuth } from "../../contexts/AuthContext";
+import { useAuth } from "../../hooks/useAuth";
 import { useUserProfiles } from "../../hooks/useUserProfiles";
 
 interface User {

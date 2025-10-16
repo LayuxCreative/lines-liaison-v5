@@ -15,8 +15,8 @@ import {
   TrendingUp,
   Calendar,
 } from "lucide-react";
-import { useAuth } from "../../contexts/AuthContext";
-import { useData } from "../../contexts/DataContext";
+import { useAuth } from "../../hooks/useAuth";
+import { useData } from "../../hooks/useData";
 import { getUserDisplayName } from "../../hooks/useRecentActivity";
 import { useSupabaseActivities } from "../../hooks/useSupabaseData";
 import { formatDistanceToNow } from "date-fns";

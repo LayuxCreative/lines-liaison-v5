@@ -1,31 +1,12 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { User, UserStatusType } from "../types";
-import { supabase, sessionManager } from "../lib/supabase";
+import { supabase, sessionManager, getSupabaseProjectRef } from "../lib/supabase";
 import { safeLocalStorage } from "../utils/safeStorage";
+import { AuthContext, AuthContextType, UserRegistrationData } from './AuthContextBase';
 
 
 
-interface UserRegistrationData {
-  full_name: string;
-  company?: string;
-  department?: string;
-  position?: string;
-  phone?: string;
-  role?: "admin" | "project_manager" | "team_member" | "client";
-}
-
-interface AuthContextType {
-  user: User | null;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string; requiresTwoFactor?: boolean }>;
-  register: (email: string, password: string, userData: UserRegistrationData) => Promise<{ success: boolean; user?: User; error?: string }>;
-  logout: () => Promise<void>;
-  updateUserStatus: (status: UserStatusType) => Promise<void>;
-  updateUserProfile: (updates: Partial<User>) => Promise<void>;
-  refreshUserProfile: () => Promise<void>;
-  isLoading: boolean;
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+// Context and types are defined in AuthContextBase to keep this file exporting only components
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -67,6 +48,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             console.log('AuthContext: User profile loaded successfully');
           } else {
             console.error('AuthContext: Error fetching user profile:', error);
+            // Ensure no stale user state persists on profile fetch failure
+            setUser(null);
+            safeLocalStorage.removeItem('user');
           }
         } else {
           console.log('AuthContext: No active session found');
@@ -164,28 +148,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         
         if (profileError) {
           console.error('❌ AuthContext: Failed to fetch user profile:', profileError.message);
-          
-          // Check if it's an RLS policy issue (user might not have a profile yet)
-          if (profileError.code === 'PGRST116' || profileError.message?.includes('RLS')) {
-            console.log('🔍 AuthContext: RLS policy issue, creating basic user profile');
-            
-            // If profile fetching fails (e.g., due to RLS policies), create a basic profile
-            const basicProfile: User = {
-              id: data.user.id,
-              email: data.user.email || '',
-              full_name: data.user.user_metadata?.full_name || data.user.email?.split('@')[0] || 'User',
-              role: 'team_member',
-              status: 'available' as UserStatusType,
-              created_at: new Date(),
-              updated_at: new Date()
-            };
-            
-            setUser(basicProfile);
-            safeLocalStorage.setItem('user', JSON.stringify(basicProfile));
-            return { success: true };
-          }
-          
-          return { success: false, error: 'Failed to load user profile' };
+
+          // Treat missing profile or RLS issues as a hard error indicating likely connection to a fresh database
+          const projectRef = getSupabaseProjectRef();
+          await supabase.auth.signOut();
+          setUser(null);
+          safeLocalStorage.removeItem('user');
+
+          const baseMsg = 'No user profile found in the current database. If this is a new Supabase project, please seed the profiles table or switch to the correct project.';
+          const projectMsg = projectRef ? ` Connected project: ${projectRef}.` : '';
+          return { success: false, error: `${baseMsg}${projectMsg}` };
         }
         
         if (profileData) {
@@ -292,108 +264,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   }
 
   // Enhanced session check with validation
-  const checkSession = async () => {
-    try {
-      setIsLoading(true)
-      
-      // Use enhanced session manager
-      const session = await sessionManager.getCurrentSession()
-      
-      if (session?.user) {
-        // Convert Supabase User to our User type
-        const userProfile: User = {
-          id: session.user.id,
-          email: session.user.email || '',
-          full_name: session.user.user_metadata?.full_name || session.user.email || '',
-          role: session.user.user_metadata?.role || 'team_member',
-          avatar_url: session.user.user_metadata?.avatar_url,
-          company: session.user.user_metadata?.company,
-          department: session.user.user_metadata?.department,
-          position: session.user.user_metadata?.position,
-          phone: session.user.user_metadata?.phone,
-          status: 'available',
-          created_at: new Date(session.user.created_at)
-        }
-        setUser(userProfile)
-        safeLocalStorage.setItem('user', JSON.stringify(userProfile))
-      } else {
-        setUser(null)
-        safeLocalStorage.removeItem('user')
-      }
-    } catch (error) {
-      console.error('Session check error:', error)
-      setUser(null)
-      safeLocalStorage.removeItem('user')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    // Initial session check
-    checkSession()
-
-    // Enhanced auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth state changed:', event, session?.user?.email)
-        
-        if (event === 'SIGNED_IN' && session?.user) {
-          const userProfile: User = {
-            id: session.user.id,
-            email: session.user.email || '',
-            full_name: session.user.user_metadata?.full_name || session.user.email || '',
-            role: session.user.user_metadata?.role || 'team_member',
-            avatar_url: session.user.user_metadata?.avatar_url,
-            company: session.user.user_metadata?.company,
-            department: session.user.user_metadata?.department,
-            position: session.user.user_metadata?.position,
-            phone: session.user.user_metadata?.phone,
-            status: 'available',
-            created_at: new Date(session.user.created_at)
-          }
-          setUser(userProfile)
-          safeLocalStorage.setItem('user', JSON.stringify(userProfile))
-        } else if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED' && !session) {
-          setUser(null)
-          safeLocalStorage.removeItem('user')
-          safeLocalStorage.removeItem('userProfile')
-        } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-          const userProfile: User = {
-            id: session.user.id,
-            email: session.user.email || '',
-            full_name: session.user.user_metadata?.full_name || session.user.email || '',
-            role: session.user.user_metadata?.role || 'team_member',
-            avatar_url: session.user.user_metadata?.avatar_url,
-            company: session.user.user_metadata?.company,
-            department: session.user.user_metadata?.department,
-            position: session.user.user_metadata?.position,
-            phone: session.user.user_metadata?.phone,
-            status: 'available',
-            created_at: new Date(session.user.created_at)
-          }
-          setUser(userProfile)
-          safeLocalStorage.setItem('user', JSON.stringify(userProfile))
-        }
-        
-        setIsLoading(false)
-      }
-    )
-
-    // Periodic session validation (every 5 minutes)
-    const sessionCheckInterval = setInterval(async () => {
-      const session = await sessionManager.getCurrentSession()
-      if (!session && user) {
-        console.warn('Session expired, logging out user')
-        await logout()
-      }
-    }, 5 * 60 * 1000) // 5 minutes
-
-    return () => {
-      subscription.unsubscribe()
-      clearInterval(sessionCheckInterval)
-    }
-  }, [])
+  // Removed secondary session check and duplicate auth listener to prevent false-positive auth states
 
   const updateUserStatus = async (status: UserStatusType) => {
     console.log('🔄 updateUserStatus called with status:', status);
@@ -494,10 +365,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
-};
+// Hook moved to src/hooks/useAuth.ts to improve React Fast Refresh compliance
+
+// Export the context so hooks in src/hooks can consume it
+// Context is exported from AuthContextBase; avoid exporting here to satisfy react-refresh rule

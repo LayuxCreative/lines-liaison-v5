@@ -8,8 +8,8 @@ import {
   List,
   FolderOpen,
 } from "lucide-react";
-import { useAuth } from "../../contexts/AuthContext";
-import { useData } from "../../contexts/DataContext";
+import { useAuth } from "../../hooks/useAuth";
+import { useData } from "../../hooks/useData";
 import ProjectCard from "../../components/dashboard/ProjectCard";
 
 const Projects: React.FC = () => {

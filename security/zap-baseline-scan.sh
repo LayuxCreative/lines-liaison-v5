@@ -4,7 +4,7 @@
 # This script performs a baseline security scan on the staging URL
 
 # Configuration
-TARGET_URL="http://localhost:5173"  # Staging URL
+TARGET_URL="http://localhost:5174"  # Staging URL
 REPORT_DIR="./security/reports"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 REPORT_FILE="$REPORT_DIR/zap_baseline_report_$TIMESTAMP.html"

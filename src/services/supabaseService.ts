@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
-import { User } from '@supabase/supabase-js';
+import type { User as AuthUser, RealtimeChannel } from '@supabase/supabase-js';
+import type { User as AppUser, PermissionGroup } from '../types';
 
 // Types
 export interface ProjectData {
@@ -56,11 +57,32 @@ export interface NotificationData {
 
 export interface ActivityData {
   id?: string;
-  action: string;
-  details?: string;
-  user_id: string;
+  // Core columns for public.activities
+  action?: string;
+  description?: string;
+  user_id?: string;
   project_id?: string;
+  metadata?: Record<string, unknown>;
+  timestamp?: string;
   created_at?: string;
+  // Flexible fields used by callers (mapped internally)
+  event_type?: string;
+  target_id?: string;
+  target_type?: string;
+  actor_email?: string;
+  occurred_at?: string;
+}
+
+// Concrete row shape returned by the 'activities' table
+interface ActivityRow {
+  id: string;
+  user_id: string;
+  project_id?: string | null;
+  action?: string | null;
+  description?: string | null;
+  metadata?: Record<string, unknown> | null;
+  timestamp?: string | null;
+  created_at?: string | null;
 }
 
 export interface RoleData {
@@ -74,14 +96,16 @@ export interface RoleData {
 export interface PermissionGroupData {
   id?: string;
   name: string;
+  display_name?: string;
   description?: string;
   permissions?: string[];
   created_at?: string;
+  is_active?: boolean;
 }
 
 class SupabaseService {
   // Authentication
-  async getCurrentUser(): Promise<User | null> {
+  async getCurrentUser(): Promise<AuthUser | null> {
     const { data: { user } } = await supabase.auth.getUser();
     return user;
   }
@@ -98,67 +122,94 @@ class SupabaseService {
     return await supabase.auth.signOut();
   }
 
+  /**
+   * Change the current authenticated user's password.
+   * Verifies the current password by re-authentication, then updates to the new password.
+   */
+  async changePassword(currentPassword: string, newPassword: string): Promise<{ success: boolean }>{
+    // Ensure there is a logged-in user
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser || !authUser.email) {
+      throw new Error('User not authenticated');
+    }
+
+    // Re-authenticate using current password to validate
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: authUser.email,
+      password: currentPassword,
+    });
+
+    if (signInError) {
+      throw new Error('Invalid current password');
+    }
+
+    // Update to the new password
+    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+    if (updateError) {
+      throw new Error(updateError.message || 'Failed to update password');
+    }
+
+    return { success: true };
+  }
+
   // Users
-  async getUsers() {
+  async getUsers(): Promise<{ success: boolean; data?: AppUser[]; error?: unknown }> {
     const { data, error } = await supabase
       .from('profiles')
       .select('*');
     
-    if (error) throw error;
-    return { success: true, data };
+    if (error) return { success: false, error };
+    return { success: true, data: data as AppUser[] };
   }
 
-  async getUserById(userId: string) {
+  async getUserById(userId: string): Promise<{ success: boolean; data?: AppUser; error?: unknown }> {
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', userId)
       .single();
     
-    if (error) throw error;
-    return { success: true, data };
+    if (error) return { success: false, error };
+    return { success: true, data: data as AppUser };
   }
 
-  async updateUser(userId: string, updates: Record<string, unknown>) {
+  async updateUser(userId: string, updates: Record<string, unknown>): Promise<{ success: boolean; data?: AppUser[]; error?: unknown }> {
     const { data, error } = await supabase
       .from('profiles')
       .update(updates)
       .eq('id', userId)
       .select();
     
-    if (error) throw error;
-    return { success: true, data };
+    if (error) return { success: false, error };
+    return { success: true, data: data as AppUser[] };
   }
 
-  async createUser(userData: Record<string, unknown>) {
+  async createUser(userData: Record<string, unknown>): Promise<{ success: boolean; data?: AppUser[]; error?: unknown }> {
     const { data, error } = await supabase
       .from('profiles')
       .insert(userData)
       .select();
     
-    if (error) throw error;
-    return { success: true, data };
+    if (error) return { success: false, error };
+    return { success: true, data: data as AppUser[] };
   }
 
-  async deleteUser(userId: string) {
+  async deleteUser(userId: string): Promise<{ success: boolean; data?: AppUser[]; error?: unknown }> {
     const { data, error } = await supabase
       .from('profiles')
       .delete()
-      .eq('id', userId);
+      .eq('id', userId)
+      .select();
     
-    if (error) throw error;
-    return { success: true, data };
+    if (error) return { success: false, error };
+    return { success: true, data: data as AppUser[] };
   }
 
   // Projects
-  async getProjects(userId?: string) {
-    let query = supabase.from('projects').select('*');
-    
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
-    
-    const { data, error } = await query;
+  async getProjects(_userId?: string) {
+    // RLS on projects already restricts rows to those accessible by the
+    // authenticated user (manager, client, or team_members contains user).
+    const { data, error } = await supabase.from('projects').select('*');
     if (error) throw error;
     return { success: true, data };
   }
@@ -262,7 +313,7 @@ class SupabaseService {
       path: uploadData.path,
       size: file.size,
       type: file.type,
-      project_id: projectId,
+      ...(projectId && { project_id: projectId }),
     };
 
     const { data, error } = await supabase
@@ -276,6 +327,9 @@ class SupabaseService {
 
   // Notifications
   async getNotifications(userId: string) {
+    if (!userId || userId.trim().length === 0) {
+      throw new Error('Invalid userId for notifications query');
+    }
     const { data, error } = await supabase
       .from('notifications')
       .select('*')
@@ -329,24 +383,74 @@ class SupabaseService {
   }
 
   // Activities
-  async getActivities(params?: { userId?: string }) {
+  async getActivities(params?: { userId?: string; limit?: number; offset?: number; event?: string; from?: string; to?: string }) {
     let query = supabase.from('activities').select('*');
-    
+
     if (params?.userId) {
       query = query.eq('user_id', params.userId);
     }
-    
-    const { data, error } = await query.order('created_at', { ascending: false });
+    if (params?.event) {
+      // The activities table uses 'action' for event type
+      query = query.eq('action', params.event);
+    }
+    if (params?.from) {
+      query = query.gte('timestamp', params.from);
+    }
+    if (params?.to) {
+      query = query.lte('timestamp', params.to);
+    }
+
+    query = query.order('timestamp', { ascending: false });
+
+    if (typeof params?.offset === 'number' && typeof params?.limit === 'number') {
+      query = query.range(params.offset, params.offset + params.limit - 1);
+    } else if (typeof params?.limit === 'number') {
+      query = query.limit(params.limit);
+    }
+
+    const { data, error } = await query;
     if (error) throw error;
-    return { success: true, data };
+
+    // Normalize for consumers expecting event_type/occurred_at/created_at/actor_email
+    const rows = (data ?? []) as ActivityRow[];
+    const normalized = rows.map((row) => {
+      const meta = row.metadata && typeof row.metadata === 'object' ? (row.metadata as Record<string, unknown>) : undefined;
+      const actor_email = meta ? (meta['actor_email'] as string | undefined) : undefined;
+
+      return {
+        ...row,
+        event_type: row.action ?? undefined,
+        occurred_at: row.timestamp ?? undefined,
+        created_at: row.created_at ?? row.timestamp ?? undefined,
+        actor_email
+      };
+    });
+
+    return { success: true, data: normalized };
   }
 
-  async createActivity(activityData: ActivityData) {
+  async createActivity(activityData: ActivityData | Record<string, unknown>) {
+    const src = (activityData ?? {}) as Partial<ActivityData> & Record<string, unknown> & { metadata?: Record<string, unknown> };
+
+    const meta = src.metadata && typeof src.metadata === 'object' ? (src.metadata as Record<string, unknown>) : undefined;
+    const user_id: string | undefined = src.user_id ?? (meta?.['user_id'] as string | undefined);
+    const project_id: string | undefined = src.project_id ?? (src.target_type === 'project' ? (src.target_id as string | undefined) : (meta?.['project_id'] as string | undefined));
+    const action: string | undefined = src.action ?? (src.event_type as string | undefined);
+    const description: string | undefined = src.description ?? (src as { details?: string }).details ?? (meta?.['description'] as string | undefined) ?? (typeof action === 'string' ? action : undefined);
+    const timestamp: string | undefined = src.timestamp ?? (src.occurred_at as string | undefined) ?? (meta?.['timestamp'] as string | undefined) ?? new Date().toISOString();
+    const metadata: Record<string, unknown> = meta ?? {};
+
+    if (!user_id || !action || !description) {
+      throw new Error('Missing required activity fields (user_id, action, description)');
+    }
+
+    const insertRow = { user_id, project_id, action, description, metadata, timestamp };
+
     const { data, error } = await supabase
       .from('activities')
-      .insert(activityData)
+      .insert(insertRow)
       .select();
-    
+
     if (error) throw error;
     return { success: true, data };
   }
@@ -402,7 +506,7 @@ class SupabaseService {
     return { success: true, data };
   }
 
-  async getPermissionGroups() {
+  async getPermissionGroups(): Promise<{ success: boolean; data?: PermissionGroup[]; error?: unknown }> {
     try {
       const { data, error } = await supabase
         .from('permission_groups')
@@ -410,14 +514,14 @@ class SupabaseService {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return { success: true, data };
+      return { success: true, data: data as PermissionGroup[] };
     } catch (error) {
       console.error('Error fetching permission groups:', error);
       return { success: false, error };
     }
   }
 
-  async createPermissionGroup(group: Omit<PermissionGroupData, 'id'>) {
+  async createPermissionGroup(group: Omit<PermissionGroupData, 'id'>): Promise<{ success: boolean; data?: PermissionGroup; error?: unknown }> {
     try {
       const { data, error } = await supabase
         .from('permission_groups')
@@ -426,14 +530,14 @@ class SupabaseService {
         .single();
 
       if (error) throw error;
-      return { success: true, data };
+      return { success: true, data: data as PermissionGroup };
     } catch (error) {
       console.error('Error creating permission group:', error);
       return { success: false, error };
     }
   }
 
-  async updatePermissionGroup(id: string, updates: Partial<PermissionGroupData>) {
+  async updatePermissionGroup(id: string, updates: Partial<PermissionGroupData>): Promise<{ success: boolean; data?: PermissionGroup; error?: unknown }> {
     try {
       const { data, error } = await supabase
         .from('permission_groups')
@@ -443,7 +547,7 @@ class SupabaseService {
         .single();
 
       if (error) throw error;
-      return { success: true, data };
+      return { success: true, data: data as PermissionGroup };
     } catch (error) {
       console.error('Error updating permission group:', error);
       return { success: false, error };
@@ -520,6 +624,19 @@ class SupabaseService {
         callback
       )
       .subscribe();
+  }
+
+  // Unsubscribe helper to clean up realtime channels safely
+  unsubscribe(channel: RealtimeChannel | { unsubscribe?: () => void }) {
+    const hasUnsubscribe = (obj: unknown): obj is { unsubscribe: () => void } =>
+      !!obj && typeof (obj as { unsubscribe?: () => void }).unsubscribe === 'function';
+    try {
+      if (hasUnsubscribe(channel)) {
+        channel.unsubscribe();
+      }
+    } catch (error) {
+      console.warn('Error unsubscribing from realtime channel:', error);
+    }
   }
 }
 

@@ -6,7 +6,7 @@ import {
   Navigate,
   useLocation,
 } from "react-router-dom";
-import { useAuth } from "./contexts/AuthContext";
+import { useAuth } from "./hooks/useAuth";
 // Realtime subscription removed - using Node.js API only
 import Header from "./components/common/Header";
 import DashboardHeader from "./components/dashboard/DashboardHeader";
@@ -52,6 +52,7 @@ const UserActivityPage = lazy(() => import("./pages/UserActivityPage"));
 const SupabaseTestPage = lazy(() => import("./pages/SupabaseTestPage"));
 const AuthDebug = lazy(() => import("./pages/AuthDebug"));
 const DataDebug = lazy(() => import("./pages/DataDebug"));
+const EnvTest = lazy(() => import("./pages/EnvTest"));
 
 const AppContent: React.FC = () => {
   const { user } = useAuth();
@@ -99,6 +100,7 @@ const AppContent: React.FC = () => {
           <Route path="/confirm-email" element={<EmailConfirmation />} />
           <Route path="/auth-debug" element={<AuthDebug />} />
           <Route path="/data-debug" element={<DataDebug />} />
+          <Route path="/env-test" element={<EnvTest />} />
 
           {/* Protected dashboard routes */}
           <Route

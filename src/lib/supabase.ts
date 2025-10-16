@@ -66,7 +66,6 @@ export const sessionManager = {
       // Clear all Supabase-related items from storage
       const keysToRemove = [
         'supabase.auth.token',
-        'sb-ymstntjoewkyissepjbc-auth-token',
         'sb-auth-token'
       ]
       
@@ -78,9 +77,25 @@ export const sessionManager = {
           console.warn(`Failed to remove ${key}:`, error)
         }
       })
+
+      // Remove any project-specific sb-*-auth-token keys dynamically
+      try {
+        const removeDynamicKeys = (storage: Storage) => {
+          const keys = Object.keys(storage)
+          keys.forEach(k => {
+            if (/^sb-.+-auth-token$/.test(k)) {
+              storage.removeItem(k)
+            }
+          })
+        }
+        removeDynamicKeys(window.localStorage)
+        removeDynamicKeys(window.sessionStorage)
+      } catch (error) {
+        console.warn('Dynamic token cleanup failed:', error)
+      }
       
       // Clear cookies if possible
-      if (typeof document !== 'undefined') {
+      if (typeof document !== 'undefined' && typeof window !== 'undefined') {
         document.cookie.split(";").forEach(cookie => {
           const eqPos = cookie.indexOf("=")
           const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim()
@@ -153,7 +168,7 @@ export const sessionManager = {
 }
 
 // Function to check database connection
-export const checkSupabaseConnection = async () => {
+export const checkSupabaseConnection = async (): Promise<{ connected: boolean; error: string | null }> => {
   try {
     console.log('🌐 Checking Supabase database connection...');
     
@@ -170,14 +185,68 @@ export const checkSupabaseConnection = async () => {
 
     console.log('✅ Database connection successful!');
     return { connected: true, error: null };
-  } catch (error) {
-    console.error('❌ Connection check error:', error.message);
-    return { connected: false, error: error.message };
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('❌ Connection check error:', msg);
+    return { connected: false, error: msg };
   }
 };
 
+// Lightweight health ping that does not depend on RLS
+export const pingSupabaseHealth = async (timeoutMs: number = 5000): Promise<{ ok: boolean; status?: number; error?: string }> => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const baseUrl = supabaseUrl;
+
+  try {
+    const res = await fetch(`${baseUrl}/auth/v1/health`, {
+      method: 'GET',
+      headers: {
+        'apikey': supabaseAnonKey,
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+        'Cache-Control': 'no-cache'
+      },
+      signal: controller.signal
+    });
+    return { ok: res.ok, status: res.status };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Health ping failed';
+    return { ok: false, error: msg };
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+// Helper: extract Supabase project reference from configured URL (e.g., abcd1234 from https://abcd1234.supabase.co)
+export function getSupabaseProjectRef(): string | null {
+  try {
+    if (!supabaseUrl || typeof supabaseUrl !== 'string') return null;
+    const match = supabaseUrl.match(/^https?:\/\/([^.]+)\.supabase\.co/i);
+    return match?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // Automatic connection check on load
 if (typeof window !== 'undefined') {
+  // Proactive cleanup: remove any sb-<ref>-auth-token keys from other projects
+  try {
+    const currentRef = getSupabaseProjectRef()
+    const maybeRemove = (storage: Storage) => {
+      Object.keys(storage).forEach(k => {
+        const m = k.match(/^sb-(.+)-auth-token$/)
+        if (m && currentRef && m[1] !== currentRef) {
+          storage.removeItem(k)
+        }
+      })
+    }
+    maybeRemove(window.localStorage)
+    maybeRemove(window.sessionStorage)
+  } catch (error) {
+    console.warn('Startup token drift cleanup failed:', error)
+  }
+
   setTimeout(() => {
     checkSupabaseConnection().then(({ connected, error }) => {
       if (connected) {

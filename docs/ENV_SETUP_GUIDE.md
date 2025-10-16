@@ -49,7 +49,7 @@ node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 # للتطوير المحلي
 VITE_API_URL=http://localhost:3001/api
 API_ORIGIN=http://localhost:3001
-WEB_ORIGIN=http://localhost:5173
+WEB_ORIGIN=http://localhost:5174
 ```
 
 ### 5. فحص الإعداد
@@ -146,11 +146,11 @@ curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
 ### خطأ CORS
 
 ```
-Access to fetch at 'http://localhost:3001/api/...' from origin 'http://localhost:5173' has been blocked by CORS policy
+Access to fetch at 'http://localhost:3001/api/...' from origin 'http://localhost:5174' has been blocked by CORS policy
 ```
 
 **الحل:**
-- تأكد من `ALLOWED_ORIGINS=http://localhost:5173` في `.env`
+- تأكد من `ALLOWED_ORIGINS=http://localhost:5174` في `.env`
 - أعد تشغيل الخادم
 
 ### خطأ Supabase Connection

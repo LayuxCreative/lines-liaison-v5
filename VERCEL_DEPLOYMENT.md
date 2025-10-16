@@ -16,7 +16,7 @@ Add these environment variables one by one:
 
 ```
 NODE_ENV = production
-VITE_SUPABASE_URL = https://ymstntjoewkyissepjbc.supabase.co
+VITE_SUPABASE_URL = https://mtpnlowzrbdqkbxjgpvm.supabase.co
 VITE_SUPABASE_ANON_KEY = [Your Supabase Anon Key]
 VITE_APP_NAME = LiNES AND LiAiSON Professional Platform
 VITE_DEBUG = false

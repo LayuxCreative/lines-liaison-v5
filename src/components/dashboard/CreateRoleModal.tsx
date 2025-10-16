@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, Shield, Users, Settings, FileText, MessageSquare, BarChart3 } from 'lucide-react';
 import { supabaseService } from '../../services/supabaseService';
 import { useNotifications } from "../../hooks/useNotifications";
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { Role, PermissionItem } from '../../types';
 
 interface CreateRoleModalProps {
@@ -14,6 +14,7 @@ interface CreateRoleModalProps {
 const CreateRoleModal: React.FC<CreateRoleModalProps> = ({ onClose, onRoleCreated, editingRole }) => {
   const { addNotification } = useNotifications();
   const { user } = useAuth();
+  const userId = user?.id || '';
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingPermissions, setIsLoadingPermissions] = useState(true);
   const [availablePermissions, setAvailablePermissions] = useState<PermissionItem[]>([]);
@@ -48,7 +49,7 @@ const CreateRoleModal: React.FC<CreateRoleModalProps> = ({ onClose, onRoleCreate
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
-  const loadPermissions = async () => {
+  const loadPermissions = useCallback(async () => {
     try {
       setIsLoadingPermissions(true);
       const response = await supabaseService.getPermissions();
@@ -63,13 +64,13 @@ const CreateRoleModal: React.FC<CreateRoleModalProps> = ({ onClose, onRoleCreate
         type: 'error',
         title: 'Error',
         message: 'Failed to load permissions',
-        userId: user?.id || '',
+        userId,
         priority: 'medium'
       });
     } finally {
       setIsLoadingPermissions(false);
     }
-  };
+  }, [addNotification, userId]);
 
   // Group permissions by category
   const getPermissionsByCategory = () => {

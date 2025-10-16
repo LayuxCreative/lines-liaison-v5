@@ -44,11 +44,18 @@ const PermissionsManagement: React.FC<PermissionsManagementProps> = ({
   } | null>(null);
   
   const [showCreatePermissionGroup, setShowCreatePermissionGroup] = useState(false);
-  const [newPermissionGroup, setNewPermissionGroup] = useState({
+  // Explicit form state typing to avoid display_name incompatibilities
+  const [newPermissionGroup, setNewPermissionGroup] = useState<{
+    name: string;
+    display_name: string;
+    description: string;
+    permissions: string[];
+    is_active: boolean;
+  }>({
     name: "",
     display_name: "",
     description: "",
-    permissions: [] as string[],
+    permissions: [],
     is_active: true,
   });
 
@@ -56,11 +63,15 @@ const PermissionsManagement: React.FC<PermissionsManagementProps> = ({
   const handleCreatePermissionGroup = async () => {
     if (!newPermissionGroup.name.trim()) {
       addNotification({
-        type: "error",
+        userId: "",
+        type: "system",
+        category: "system",
         title: "Validation Error",
         message: "Permission group name is required.",
-        userId: "",
-        priority: "medium" as const,
+        priority: "medium",
+        status: "unread",
+        actionRequired: false,
+        metadata: { relatedEntityType: "permission_group" },
       });
       return;
     }
@@ -93,11 +104,26 @@ const PermissionsManagement: React.FC<PermissionsManagementProps> = ({
         permissions: finalPermissions,
         is_active: newPermissionGroup.is_active,
         created_at: new Date().toISOString(),
-        updated_at: new Date(),
       };
 
       const response = await supabaseService.createPermissionGroup(group);
-      const createdGroup = response.data;
+      if (!response.success) {
+        const errorMessage = typeof response.error === 'string' ? response.error : 'Failed to create permission group.';
+        addNotification({
+          userId: "",
+          type: "system",
+          category: "system",
+          title: "Error",
+          message: errorMessage,
+          priority: "medium",
+          status: "unread",
+          actionRequired: false,
+          metadata: { relatedEntityType: "permission_group" },
+        });
+        return;
+      }
+      const dataRaw = response.data as unknown;
+      const createdGroup = (Array.isArray(dataRaw) ? dataRaw[0] : dataRaw) as PermissionGroup;
 
       const updatedGroups = [...permissionGroups, createdGroup];
       setPermissionGroups(updatedGroups);
@@ -112,20 +138,28 @@ const PermissionsManagement: React.FC<PermissionsManagementProps> = ({
       });
 
       addNotification({
-        type: "success",
+        userId: "",
+        type: "project_update",
+        category: "work",
         title: "Permission Group Created",
         message: `Permission group "${createdGroup.display_name}" has been created successfully.`,
-        userId: "",
-        priority: "medium" as const,
+        priority: "medium",
+        status: "unread",
+        actionRequired: false,
+        metadata: { relatedEntityType: "permission_group", relatedEntityId: createdGroup.id },
       });
     } catch (error) {
       console.error('Error creating permission group:', error);
       addNotification({
-        type: "error",
+        userId: "",
+        type: "system",
+        category: "system",
         title: "Error",
         message: "Failed to create permission group. Please try again.",
-        userId: "",
-        priority: "medium" as const,
+        priority: "medium",
+        status: "unread",
+        actionRequired: false,
+        metadata: { relatedEntityType: "permission_group" },
       });
     }
   };
@@ -152,11 +186,15 @@ const PermissionsManagement: React.FC<PermissionsManagementProps> = ({
   const handleUpdatePermissionGroup = async () => {
     if (!newPermissionGroup.name.trim()) {
       addNotification({
-        type: "error",
+        userId: "",
+        type: "system",
+        category: "system",
         title: "Validation Error",
         message: "Permission group name is required.",
-        userId: "",
-        priority: "medium" as const,
+        priority: "medium",
+        status: "unread",
+        actionRequired: false,
+        metadata: { relatedEntityType: "permission_group" },
       });
       return;
     }
@@ -190,11 +228,26 @@ const PermissionsManagement: React.FC<PermissionsManagementProps> = ({
         description: newPermissionGroup.description,
         permissions: finalPermissions,
         is_active: newPermissionGroup.is_active,
-        updated_at: new Date(),
       };
 
       const response = await supabaseService.updatePermissionGroup(editingPermissionGroup.id, updatedGroup);
-      const savedGroup = response.data;
+      if (!response.success) {
+        const errorMessage = typeof response.error === 'string' ? response.error : 'Failed to update permission group.';
+        addNotification({
+          userId: "",
+          type: "system",
+          category: "system",
+          title: "Error",
+          message: errorMessage,
+          priority: "medium",
+          status: "unread",
+          actionRequired: false,
+          metadata: { relatedEntityType: "permission_group", relatedEntityId: editingPermissionGroup.id },
+        });
+        return;
+      }
+      const respData = response.data as unknown;
+      const savedGroup = (Array.isArray(respData) ? respData[0] : respData) as PermissionGroup;
 
       const updatedGroups = permissionGroups.map((group) =>
         group.id === editingPermissionGroup.id ? savedGroup : group
@@ -212,20 +265,28 @@ const PermissionsManagement: React.FC<PermissionsManagementProps> = ({
       });
 
       addNotification({
-        type: "success",
+        userId: "",
+        type: "project_update",
+        category: "work",
         title: "Permission Group Updated",
         message: `Permission group "${savedGroup.display_name}" has been updated successfully.`,
-        userId: "",
-        priority: "medium" as const,
+        priority: "medium",
+        status: "unread",
+        actionRequired: false,
+        metadata: { relatedEntityType: "permission_group", relatedEntityId: savedGroup.id },
       });
     } catch (error) {
       console.error('Error updating permission group:', error);
       addNotification({
-        type: "error",
+        userId: "",
+        type: "system",
+        category: "system",
         title: "Error",
         message: "Failed to update permission group. Please try again.",
-        userId: "",
-        priority: "medium" as const,
+        priority: "medium",
+        status: "unread",
+        actionRequired: false,
+        metadata: { relatedEntityType: "permission_group" },
       });
     }
   };
@@ -245,20 +306,28 @@ const PermissionsManagement: React.FC<PermissionsManagementProps> = ({
       setPermissionGroups(updatedGroups);
 
       addNotification({
-        type: "success",
+        userId: "",
+        type: "project_update",
+        category: "work",
         title: "Permission Group Deleted",
         message: `Permission group "${group.name}" has been deleted.`,
-        userId: "",
-        priority: "medium" as const,
+        priority: "medium",
+        status: "unread",
+        actionRequired: false,
+        metadata: { relatedEntityType: "permission_group", relatedEntityId: group.id },
       });
     } catch (error) {
       console.error("Error deleting permission group:", error);
       addNotification({
-        type: "error",
+        userId: "",
+        type: "system",
+        category: "system",
         title: "Error",
         message: "Failed to delete permission group. Please try again.",
-        userId: "",
-        priority: "medium" as const,
+        priority: "medium",
+        status: "unread",
+        actionRequired: false,
+        metadata: { relatedEntityType: "permission_group" },
       });
     }
   };

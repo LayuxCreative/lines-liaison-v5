@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { supabaseService } from '../services/supabaseService';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 
 export interface ActivityMetadata {
   [key: string]: unknown;

@@ -37,6 +37,8 @@ export const PermissionGuard: React.FC<PermissionGuardProps> = ({
   fallback = null,
   showFallback = true,
 }) => {
+  // avoid no-unused-vars for prop 'user' when not directly referenced
+  void user;
   const hasPermission = (
     checkResource: string,
     checkAction: PermissionAction,
@@ -138,8 +140,8 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({
   );
 };
 
-// Hook to use permission context
-export const usePermissions = (): PermissionContextType => {
+// Hook to use permission context (internal only)
+const usePermissions = (): PermissionContextType => {
   const context = React.useContext(PermissionContext);
   if (!context) {
     throw new Error("usePermissions must be used within a PermissionProvider");
@@ -147,46 +149,7 @@ export const usePermissions = (): PermissionContextType => {
   return context;
 };
 
-// Higher-order component for permission checking
-export const withPermissions = <P extends object>(
-  Component: React.ComponentType<P>,
-  requiredPermissions: Array<{ resource: string; action: PermissionAction }>,
-) => {
-  return (props: P) => {
-    const { hasAllPermissions } = usePermissions();
-
-    if (!hasAllPermissions(requiredPermissions)) {
-      return (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex">
-            <svg
-              className="w-5 h-5 text-red-400"
-              fill="currentColor"
-              viewBox="0 0 20 20"
-            >
-              <path
-                fillRule="evenodd"
-                d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                clipRule="evenodd"
-              />
-            </svg>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800">
-                Insufficient Permissions
-              </h3>
-              <p className="text-sm text-red-700 mt-1">
-                You don't have the required permissions to access this
-                component.
-              </p>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    return <Component {...props} />;
-  };
-};
+// Removed HOC export to comply with react-refresh rules (unused externally)
 
 // Conditional rendering component based on permissions
 interface ConditionalRenderProps {
@@ -302,55 +265,6 @@ export const PermissionLink: React.FC<PermissionLinkProps> = ({
     <a {...props} className={className}>
       {children}
     </a>
-  );
-};
-
-// Utility function to check multiple permissions
-export const checkPermissions = (
-  permissions: Permission[],
-  checks: Array<{
-    resource: string;
-    action: PermissionAction;
-    operator?: "AND" | "OR";
-  }>,
-): boolean => {
-  const hasPermission = (
-    resource: string,
-    action: PermissionAction,
-  ): boolean => {
-    return permissions.some(
-      (permission) =>
-        permission.resource === resource && permission.actions.includes(action),
-    );
-  };
-
-  // Default to AND operator if not specified
-  const operator = checks[0]?.operator || "AND";
-
-  if (operator === "OR") {
-    return checks.some((check) => hasPermission(check.resource, check.action));
-  }
-
-  return checks.every((check) => hasPermission(check.resource, check.action));
-};
-
-// Permission level checker
-export const hasMinimumPermissionLevel = (
-  permissions: Permission[],
-  resource: string,
-  minimumLevel: "read" | "write" | "admin",
-): boolean => {
-  const resourcePermissions = permissions.filter(
-    (p) => p.resource === resource,
-  );
-
-  if (resourcePermissions.length === 0) return false;
-
-  const levelHierarchy = { none: 0, read: 1, write: 2, admin: 3 };
-  const requiredLevel = levelHierarchy[minimumLevel];
-
-  return resourcePermissions.some(
-    (p) => levelHierarchy[p.level] >= requiredLevel,
   );
 };
 

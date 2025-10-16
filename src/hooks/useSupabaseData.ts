@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import type { ActivityLog } from './useRecentActivity';
 
@@ -22,16 +22,18 @@ export function useSupabaseData<T = Record<string, unknown>>(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = async () => {
+  const { select, limit, orderBy, filter } = options || {};
+
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      let query = supabase.from(tableName).select(options?.select || '*');
+      let query = supabase.from(tableName).select(select || '*');
 
       // Apply filter
-      if (options?.filter) {
-        const { column, value, operator = 'eq' } = options.filter;
+      if (filter) {
+        const { column, value, operator = 'eq' } = filter;
         switch (operator) {
           case 'eq':
             query = query.eq(column, value);
@@ -55,15 +57,15 @@ export function useSupabaseData<T = Record<string, unknown>>(
       }
 
       // Apply ordering
-      if (options?.orderBy) {
-        query = query.order(options.orderBy.column, { 
-          ascending: options.orderBy.ascending ?? false 
+      if (orderBy) {
+        query = query.order(orderBy.column, { 
+          ascending: orderBy.ascending ?? false 
         });
       }
 
       // Apply limit
-      if (options?.limit) {
-        query = query.limit(options.limit);
+      if (limit) {
+        query = query.limit(limit);
       }
 
       const { data: result, error: fetchError } = await query;
@@ -80,11 +82,11 @@ export function useSupabaseData<T = Record<string, unknown>>(
     } finally {
       setLoading(false);
     }
-  };
+  }, [tableName, select, limit, orderBy, filter]);
 
   useEffect(() => {
     fetchData();
-  }, [tableName, JSON.stringify(options)]);
+  }, [fetchData]);
 
   return {
     data,
@@ -96,10 +98,10 @@ export function useSupabaseData<T = Record<string, unknown>>(
 
 // Specific hook for activities
 export function useSupabaseActivities() {
-  return useSupabaseData<ActivityLog>('activity_logs', {
+  return useSupabaseData<ActivityLog>('activities', {
     select: '*',
     limit: 50,
-    orderBy: { column: 'created_at', ascending: false }
+    orderBy: { column: 'timestamp', ascending: false }
   });
 }
 

@@ -10,7 +10,7 @@ vi.mock('../../../contexts/AuthContext', () => ({
   })
 }));
 
-vi.mock('../../../contexts/NotificationContext', () => ({
+vi.mock('../../../hooks/useNotifications', () => ({
   useNotifications: () => ({ unreadCount: 3 })
 }));
 
@@ -46,7 +46,7 @@ describe('DashboardHeader', () => {
   it('displays the Lines Liaison logo', () => {
     renderWithRouter(<DashboardHeader />);
     
-    expect(screen.getByText('Lines Liaison')).toBeInTheDocument();
+    expect(screen.getByText('LiNES AND LiAiSON')).toBeInTheDocument();
   });
 
   it('shows user name when logged in', () => {

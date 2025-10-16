@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Shield, Copy, Download, CheckCircle, AlertTriangle, RefreshCw } from 'lucide-react';
 import { twoFactorService, type TwoFactorSetup as TwoFactorSetupData } from '../../services/twoFactorService';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { useNotifications } from "../../hooks/useNotifications";
 import { supabaseService } from '../../services/supabaseService';
 
@@ -21,11 +21,7 @@ const TwoFactorSetup: React.FC<TwoFactorSetupProps> = ({ onComplete, onCancel })
   const [step, setStep] = useState<'setup' | 'verify' | 'backup'>('setup');
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    generateSetup();
-  }, []);
-
-  const generateSetup = async () => {
+  const generateSetup = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -39,7 +35,11 @@ const TwoFactorSetup: React.FC<TwoFactorSetupProps> = ({ onComplete, onCancel })
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    generateSetup();
+  }, [generateSetup]);
 
   const handleVerifyCode = async () => {
     if (!setupData || !user) return;
@@ -68,10 +68,15 @@ const TwoFactorSetup: React.FC<TwoFactorSetupProps> = ({ onComplete, onCancel })
 
       setStep('backup');
       addNotification({
-        type: 'success',
+        type: 'security',
+        category: 'security',
         title: 'Two-Factor Authentication Enabled',
         message: 'Your account is now protected with 2FA. Please save your backup codes.',
-        userId: user.id
+        priority: 'high',
+        status: 'unread',
+        actionRequired: true,
+        userId: user.id,
+        metadata: { relatedEntityType: 'user', relatedEntityId: user.id },
       });
     } catch (error) {
       console.error('Error enabling 2FA:', error);
@@ -85,10 +90,15 @@ const TwoFactorSetup: React.FC<TwoFactorSetupProps> = ({ onComplete, onCancel })
     try {
       await navigator.clipboard.writeText(text);
       addNotification({
-        type: 'success',
+        type: 'message',
+        category: 'system',
         title: 'Copied',
         message: 'Copied to clipboard',
-        userId: user?.id || ''
+        priority: 'low',
+        status: 'unread',
+        actionRequired: false,
+        userId: user?.id || '',
+        metadata: { customData: { target: 'clipboard' } },
       });
     } catch (error) {
       console.error('Failed to copy:', error);

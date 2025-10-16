@@ -1,27 +1,70 @@
 // Date Helpers
-export const formatDate = (date: Date | string): string => {
-  const d = new Date(date);
-  return d.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+const toValidDate = (
+  date: Date | string | number | null | undefined
+): Date | null => {
+  if (date == null) return null;
+  if (date instanceof Date) {
+    return isNaN(date.getTime()) ? null : date;
+  }
+  if (typeof date === 'number') {
+    if (!Number.isFinite(date)) return null;
+    const d = new Date(date);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof date === 'string') {
+    const s = date.trim();
+    if (!s) return null;
+    let d = new Date(s);
+    if (isNaN(d.getTime())) {
+      const iso = s.includes('T') ? s : s.replace(' ', 'T');
+      const withZ = /T\d{2}:\d{2}/.test(iso) && !/[Zz]$/.test(iso) ? `${iso}Z` : iso;
+      d = new Date(withZ);
+    }
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
 };
 
-export const formatDateTime = (date: Date | string): string => {
-  const d = new Date(date);
-  return d.toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+export const formatDate = (
+  date: Date | string | number | null | undefined
+): string => {
+  const d = toValidDate(date);
+  if (!d) return 'N/A';
+  try {
+    return d.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  } catch {
+    return 'N/A';
+  }
 };
 
-export const getRelativeTime = (date: Date | string): string => {
+export const formatDateTime = (
+  date: Date | string | number | null | undefined
+): string => {
+  const d = toValidDate(date);
+  if (!d) return 'N/A';
+  try {
+    return d.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return 'N/A';
+  }
+};
+
+export const getRelativeTime = (
+  date: Date | string | number | null | undefined
+): string => {
+  const target = toValidDate(date);
+  if (!target) return 'N/A';
   const now = new Date();
-  const target = new Date(date);
   const diffInSeconds = Math.floor((now.getTime() - target.getTime()) / 1000);
 
   if (diffInSeconds < 60) return 'just now';
@@ -90,12 +133,22 @@ export const groupBy = <T>(array: T[], key: keyof T): Record<string, T[]> => {
 };
 
 export const sortBy = <T>(array: T[], key: keyof T, direction: 'asc' | 'desc' = 'asc'): T[] => {
+  const toComparable = (val: unknown): number | string => {
+    if (val == null) return Number.NEGATIVE_INFINITY;
+    if (typeof val === 'number') return val;
+    if (val instanceof Date) return val.getTime();
+    if (typeof val === 'string') return val.toLowerCase();
+    return String(val);
+  };
+
   return [...array].sort((a, b) => {
-    const aVal = a[key];
-    const bVal = b[key];
-    
-    if (aVal < bVal) return direction === 'asc' ? -1 : 1;
-    if (aVal > bVal) return direction === 'asc' ? 1 : -1;
+    const aVal = a[key] as unknown;
+    const bVal = b[key] as unknown;
+    const av = toComparable(aVal);
+    const bv = toComparable(bVal);
+
+    if (av < bv) return direction === 'asc' ? -1 : 1;
+    if (av > bv) return direction === 'asc' ? 1 : -1;
     return 0;
   });
 };
@@ -105,10 +158,12 @@ export const debounce = <T extends (...args: unknown[]) => unknown>(
   func: T,
   wait: number
 ): ((...args: Parameters<T>) => void) => {
-  let timeout: NodeJS.Timeout;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   
   return (...args: Parameters<T>) => {
-    clearTimeout(timeout);
+    if (timeout !== undefined) {
+      clearTimeout(timeout);
+    }
     timeout = setTimeout(() => func(...args), wait);
   };
 };
@@ -117,7 +172,7 @@ export const throttle = <T extends (...args: unknown[]) => unknown>(
   func: T,
   limit: number
 ): ((...args: Parameters<T>) => void) => {
-  let inThrottle: boolean;
+  let inThrottle = false;
   
   return (...args: Parameters<T>) => {
     if (!inThrottle) {
@@ -138,12 +193,14 @@ export const sleep = (ms: number): Promise<void> => {
 
 // Color Helpers
 export const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return result ? {
-    r: parseInt(result[1], 16),
-    g: parseInt(result[2], 16),
-    b: parseInt(result[3], 16)
-  } : null;
+  const match = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!match) return null;
+  const [, r, g, b] = match;
+  return {
+    r: parseInt(r, 16),
+    g: parseInt(g, 16),
+    b: parseInt(b, 16)
+  };
 };
 
 export const rgbToHex = (r: number, g: number, b: number): string => {

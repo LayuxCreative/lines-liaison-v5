@@ -8,11 +8,12 @@ import {
 } from "lucide-react";
 
 import { useNotifications } from "../../hooks/useNotifications";
-import { useAuth } from "../../contexts/AuthContext";
+import { useAuth } from "../../hooks/useAuth";
 import UserManagement from "../../components/dashboard/UserManagement";
 import GeneralSettings from "../../components/dashboard/GeneralSettings";
 import SecuritySettings from "../../components/dashboard/SecuritySettings";
 import { safeLocalStorage } from "../../utils/safeStorage";
+import { supabaseService } from "../../services/supabaseService";
 
 const Settings: React.FC = () => {
   const { user } = useAuth();
@@ -91,7 +92,12 @@ const Settings: React.FC = () => {
     addNotification({
       title: 'تم الحفظ',
       message: 'تم حفظ الإعدادات بنجاح',
-      type: 'success',
+      type: 'system',
+      category: 'system',
+      priority: 'medium',
+      status: 'unread',
+      actionRequired: false,
+      metadata: {},
       userId: user?.id || ''
     });
   };
@@ -160,8 +166,8 @@ const Settings: React.FC = () => {
           <SecuritySettings 
             settings={settings}
             onSettingChange={handleSettingChange}
-            onPasswordChange={async () => {
-              console.log('Password change requested');
+            onPasswordChange={async (currentPassword: string, newPassword: string) => {
+              await supabaseService.changePassword(currentPassword, newPassword);
             }}
           />
         );

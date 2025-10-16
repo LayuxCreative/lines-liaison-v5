@@ -1,200 +1,333 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { supabaseService } from '../services/supabaseService';
+import React, { useReducer, useEffect, useCallback, useMemo } from 'react';
+import { useAuth } from '../hooks/useAuth';
+import { supabaseService, type NotificationData } from '../services/supabaseService';
+import { EnhancedNotification, NotificationSettings, NotificationCategory, NotificationPriority, NotificationType, NotificationStatus } from '../types';
+import type { RealtimeChannel } from '@supabase/supabase-js';
+import { NotificationContext, type NotificationContextType, type NotificationAction, type NotificationState } from './NotificationContextBase';
 
-interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  type: 'success' | 'error' | 'warning' | 'info';
-  timestamp: Date;
-  isRead: boolean;
-  actionUrl?: string;
-}
+const initialState: NotificationState = {
+  notifications: [],
+  settings: {
+    userId: '',
+    emailNotifications: true,
+    pushNotifications: true,
+    inAppNotifications: true,
+    categories: {
+      urgent: true,
+      work: true,
+      administrative: true,
+      social: true,
+      financial: true,
+      security: true,
+      system: true,
+    },
+    quietHours: {
+      enabled: false,
+      startTime: '22:00',
+      endTime: '08:00',
+    },
+    frequency: 'immediate',
+    updatedAt: new Date(),
+  },
+  isLoading: false,
+  error: null,
+  unreadCount: 0,
+  toastNotifications: [],
+};
 
-interface NotificationContextType {
-  notifications: Notification[];
-  unreadCount: number;
-  addNotification: (notification: Omit<Notification, 'id' | 'timestamp' | 'isRead'>) => void;
-  markAsRead: (id: string) => void;
-  markAllAsRead: () => void;
-  deleteNotification: (id: string) => void;
-  loadNotifications: () => Promise<void>;
-}
-
-interface ApiNotification {
-  id: string;
-  title: string;
-  message: string;
-  type: string;
-  created_at: string;
-  is_read: boolean;
-  action_url?: string;
-}
-
-const convertSupabaseNotification = (apiNotification: ApiNotification): Notification => ({
-  id: apiNotification.id,
-  title: apiNotification.title,
-  message: apiNotification.message,
-  type: apiNotification.type as 'success' | 'error' | 'warning' | 'info',
-  timestamp: new Date(apiNotification.created_at),
-  isRead: apiNotification.is_read,
-  actionUrl: apiNotification.action_url,
-});
-
-const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
+const notificationReducer = (
+  state: NotificationState,
+  action: NotificationAction,
+): NotificationState => {
+  switch (action.type) {
+    case 'SET_LOADING':
+      return { ...state, isLoading: action.payload };
+    case 'SET_ERROR':
+      return { ...state, error: action.payload, isLoading: false };
+    case 'SET_NOTIFICATIONS': {
+      const notifications = action.payload;
+      const unreadCount = notifications.filter((n) => n.status === 'unread').length;
+      return { ...state, notifications, unreadCount, isLoading: false };
+    }
+    case 'ADD_NOTIFICATION': {
+      const newNotification = action.payload;
+      const notifications = [newNotification, ...state.notifications];
+      const unreadCount = notifications.filter((n) => n.status === 'unread').length;
+      return { ...state, notifications, unreadCount };
+    }
+    case 'UPDATE_NOTIFICATION': {
+      const { id, updates } = action.payload;
+      const notifications = state.notifications.map((n) => (n.id === id ? { ...n, ...updates } : n));
+      const unreadCount = notifications.filter((n) => n.status === 'unread').length;
+      return { ...state, notifications, unreadCount };
+    }
+    case 'DELETE_NOTIFICATION': {
+      const notifications = state.notifications.filter((n) => n.id !== action.payload);
+      const unreadCount = notifications.filter((n) => n.status === 'unread').length;
+      return { ...state, notifications, unreadCount };
+    }
+    case 'MARK_AS_READ': {
+      const notifications = state.notifications.map((n) => (n.id === action.payload ? { ...n, status: 'read' } : n));
+      const unreadCount = notifications.filter((n) => n.status === 'unread').length;
+      return { ...state, notifications, unreadCount };
+    }
+    case 'MARK_ALL_AS_READ': {
+      const notifications = state.notifications.map((n) => (n.status === 'unread' ? { ...n, status: 'read' } : n));
+      return { ...state, notifications, unreadCount: 0 };
+    }
+    case 'SET_SETTINGS':
+      return { ...state, settings: action.payload };
+    case 'UPDATE_SETTINGS': {
+      const settings = { ...state.settings, ...action.payload, updatedAt: new Date() };
+      return { ...state, settings };
+    }
+    case 'ADD_TOAST': {
+      const toastNotifications = [...state.toastNotifications, action.payload];
+      return { ...state, toastNotifications };
+    }
+    case 'REMOVE_TOAST': {
+      const toastNotifications = state.toastNotifications.filter((n) => n.id !== action.payload);
+      return { ...state, toastNotifications };
+    }
+    case 'CLEAR_TOASTS':
+      return { ...state, toastNotifications: [] };
+    default:
+      return state;
+  }
+};
 
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const { user } = useAuth();
+  const [state, dispatch] = useReducer(notificationReducer, initialState);
 
-  // Memoize the loadNotifications function to prevent unnecessary re-renders
+  const generateId = useCallback(() => `notification_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, []);
+
+  const parseTime = useCallback((time: string) => {
+    const [hStr, mStr] = (time ?? '').split(':');
+    const h = Number(hStr);
+    const m = Number(mStr);
+    return {
+      hours: Number.isFinite(h) && h >= 0 ? h : 0,
+      minutes: Number.isFinite(m) && m >= 0 ? m : 0,
+    };
+  }, []);
+
+  const isQuietHours = useCallback(() => {
+    if (!state.settings.quietHours.enabled) return false;
+    const now = new Date();
+    const currentTime = now.getHours() * 60 + now.getMinutes();
+    const { hours: startHour, minutes: startMin } = parseTime(state.settings.quietHours.startTime || '00:00');
+    const { hours: endHour, minutes: endMin } = parseTime(state.settings.quietHours.endTime || '00:00');
+    const startTime = startHour * 60 + startMin;
+    const endTime = endHour * 60 + endMin;
+    if (startTime <= endTime) {
+      return currentTime >= startTime && currentTime <= endTime;
+    }
+    return currentTime >= startTime || currentTime <= endTime; // spans midnight
+  }, [state.settings.quietHours, parseTime]);
+
+  const shouldShowNotification = useCallback(
+    (notification: EnhancedNotification) => {
+      if (!state.settings.categories[notification.category]) return false;
+      if (isQuietHours() && notification.priority !== 'critical') return false;
+      return true;
+    },
+    [state.settings.categories, isQuietHours],
+  );
+
+  const convertSupabaseNotification = useCallback(
+    (api: NotificationData): EnhancedNotification => {
+      const obj: EnhancedNotification = {
+        id: api.id ?? generateId(),
+        userId: api.user_id,
+        type: (api.type ?? 'system') as NotificationType,
+        category: 'system',
+        title: api.title,
+        message: api.message,
+        priority: 'medium',
+        status: (api.read ? 'read' : 'unread') as NotificationStatus,
+        actionRequired: false,
+        metadata: {},
+        createdAt: api.created_at ? new Date(api.created_at) : new Date(),
+      };
+      if (api.read) {
+        obj.readAt = api.created_at ? new Date(api.created_at) : new Date();
+      }
+      return obj;
+    },
+    [generateId],
+  );
+
   const loadNotifications = useCallback(async () => {
-    if (isLoading) return; // Prevent multiple simultaneous loads
-    
+    if (!user?.id) return;
+    dispatch({ type: 'SET_LOADING', payload: true });
     try {
-      setIsLoading(true);
-      const response = await supabaseService.getNotifications();
-      
+      const response = await supabaseService.getNotifications(user.id);
       if (response.success && response.data) {
-        const convertedNotifications = response.data.map(convertSupabaseNotification);
-        setNotifications(convertedNotifications);
+        const converted = (response.data as NotificationData[]).map(convertSupabaseNotification);
+        dispatch({ type: 'SET_NOTIFICATIONS', payload: converted });
+      } else {
+        dispatch({ type: 'SET_ERROR', payload: 'Failed to load notifications' });
       }
     } catch (error) {
       console.error('Error loading notifications:', error);
+      dispatch({ type: 'SET_ERROR', payload: 'Failed to load notifications' });
     } finally {
-      setIsLoading(false);
+      dispatch({ type: 'SET_LOADING', payload: false });
     }
-  }, [isLoading]);
+  }, [user?.id, convertSupabaseNotification]);
 
-  // Load notifications on mount
   useEffect(() => {
     loadNotifications();
   }, [loadNotifications]);
 
-  // Memoize the addNotification function
-  const addNotification = useCallback((notification: Omit<Notification, 'id' | 'timestamp' | 'isRead'>) => {
-    const newNotification: Notification = {
-      ...notification,
-      id: Date.now().toString(),
-      timestamp: new Date(),
-      isRead: false,
+  useEffect(() => {
+    if (!user?.id) return;
+    let subscription: RealtimeChannel | { unsubscribe?: () => void } | null = null;
+    const setup = async () => {
+      try {
+        subscription = await supabaseService.subscribeToNotifications(user.id, (payload: Record<string, unknown>) => {
+          const eventType = payload.eventType as 'INSERT' | 'UPDATE' | 'DELETE' | undefined;
+          const newRow = payload.new as NotificationData | undefined;
+          const oldRow = payload.old as NotificationData | undefined;
+          if (eventType === 'INSERT' && newRow) {
+            dispatch({ type: 'ADD_NOTIFICATION', payload: convertSupabaseNotification(newRow) });
+          } else if (eventType === 'UPDATE' && newRow) {
+            const updated = convertSupabaseNotification(newRow);
+            dispatch({ type: 'UPDATE_NOTIFICATION', payload: { id: updated.id, updates: updated } });
+          } else if (eventType === 'DELETE' && oldRow?.id) {
+            dispatch({ type: 'DELETE_NOTIFICATION', payload: oldRow.id });
+          }
+        });
+      } catch (err) {
+        console.warn('Realtime subscription error:', err);
+      }
     };
+    setup();
+    return () => {
+      if (subscription) {
+        supabaseService.unsubscribe(subscription);
+      }
+    };
+  }, [user?.id, convertSupabaseNotification]);
 
-    // Optimistic UI update
-    setNotifications(prev => [newNotification, ...prev]);
+  const addNotification = useCallback(
+    (notificationData: Omit<EnhancedNotification, 'id' | 'createdAt' | 'updatedAt'>) => {
+      const notification: EnhancedNotification = {
+        ...notificationData,
+        id: generateId(),
+        createdAt: new Date(),
+      } as EnhancedNotification;
+      dispatch({ type: 'ADD_NOTIFICATION', payload: notification });
+      if (state.settings.inAppNotifications && shouldShowNotification(notification)) {
+        dispatch({ type: 'ADD_TOAST', payload: notification });
+      }
+      if (user?.id) {
+        supabaseService
+          .createNotification({
+            title: notification.title,
+            message: notification.message,
+            type: notification.type,
+            user_id: user.id,
+          })
+          .catch((error) => {
+            console.error('Error creating notification:', error);
+            dispatch({ type: 'DELETE_NOTIFICATION', payload: notification.id });
+          });
+      }
+    },
+    [generateId, state.settings.inAppNotifications, shouldShowNotification, user?.id],
+  );
 
-    // Sync with backend
-    supabaseService.createNotification({
-      title: notification.title,
-      message: notification.message,
-      type: notification.type,
-      action_url: notification.actionUrl,
-    }).catch(error => {
-      console.error('Error creating notification:', error);
-      // Revert optimistic update on error
-      setNotifications(prev => prev.filter(n => n.id !== newNotification.id));
+  const markAsRead = useCallback((id: string) => {
+    dispatch({ type: 'MARK_AS_READ', payload: id });
+    supabaseService.markNotificationAsRead(id).catch((error) => {
+      console.error('Error marking notification as read:', error);
     });
   }, []);
 
-  // Memoize the markAsRead function
-  const markAsRead = useCallback(async (id: string) => {
-    // Optimistic UI update
-    setNotifications(prev => 
-      prev.map(notification => 
-        notification.id === id 
-          ? { ...notification, isRead: true }
-          : notification
-      )
-    );
-
-    try {
-      await supabaseService.markNotificationAsRead(id);
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
-      // Revert optimistic update on error
-      setNotifications(prev => 
-        prev.map(notification => 
-          notification.id === id 
-            ? { ...notification, isRead: false }
-            : notification
-        )
-      );
+  const markAllAsRead = useCallback(() => {
+    dispatch({ type: 'MARK_ALL_AS_READ' });
+    if (user?.id) {
+      supabaseService.markAllNotificationsAsRead(user.id).catch((error) => {
+        console.error('Error marking all notifications as read:', error);
+      });
     }
+  }, [user?.id]);
+
+  const deleteNotification = useCallback((id: string) => {
+    dispatch({ type: 'DELETE_NOTIFICATION', payload: id });
+    dispatch({ type: 'REMOVE_TOAST', payload: id });
+    supabaseService.deleteNotification(id).catch((error) => {
+      console.error('Error deleting notification:', error);
+    });
   }, []);
 
-  // Memoize the markAllAsRead function
-  const markAllAsRead = useCallback(async () => {
-    const unreadIds = notifications.filter(n => !n.isRead).map(n => n.id);
-    
-    if (unreadIds.length === 0) return;
+  const updateSettings = useCallback((settings: Partial<NotificationSettings>) => {
+    dispatch({ type: 'UPDATE_SETTINGS', payload: settings });
+  }, []);
 
-    // Optimistic UI update
-    setNotifications(prev => 
-      prev.map(notification => ({ ...notification, isRead: true }))
-    );
+  const showToast = useCallback(
+    (notificationData: Omit<EnhancedNotification, 'id' | 'createdAt' | 'updatedAt'>) => {
+      const notification: EnhancedNotification = {
+        ...notificationData,
+        id: generateId(),
+        createdAt: new Date(),
+      } as EnhancedNotification;
+      if (shouldShowNotification(notification)) {
+        dispatch({ type: 'ADD_TOAST', payload: notification });
+      }
+    },
+    [generateId, shouldShowNotification],
+  );
 
-    try {
-      await supabaseService.markAllNotificationsAsRead();
-    } catch (error) {
-      console.error('Error marking all notifications as read:', error);
-      // Revert optimistic update on error
-      setNotifications(prev => 
-        prev.map(notification => 
-          unreadIds.includes(notification.id)
-            ? { ...notification, isRead: false }
-            : notification
-        )
-      );
-    }
-  }, [notifications]);
+  const removeToast = useCallback((id: string) => {
+    dispatch({ type: 'REMOVE_TOAST', payload: id });
+  }, []);
 
-  // Memoize the deleteNotification function
-  const deleteNotification = useCallback(async (id: string) => {
-    // Optimistic UI update
-    const notificationToDelete = notifications.find(n => n.id === id);
-    setNotifications(prev => prev.filter(notification => notification.id !== id));
+  const getFilteredNotifications = useCallback(
+    (filters: { category?: NotificationCategory; priority?: NotificationPriority; status?: 'read' | 'unread'; search?: string } = {}) => {
+      let filtered = state.notifications;
+      if (filters.category) filtered = filtered.filter((n) => n.category === filters.category);
+      if (filters.priority) filtered = filtered.filter((n) => n.priority === filters.priority);
+      if (filters.status) filtered = filtered.filter((n) => n.status === filters.status);
+      if (filters.search) {
+        const q = filters.search.toLowerCase();
+        filtered = filtered.filter((n) => n.title.toLowerCase().includes(q) || n.message.toLowerCase().includes(q));
+      }
+      return filtered;
+    },
+    [state.notifications],
+  );
 
-    try {
-      await supabaseService.deleteNotification(id);
-    } catch (error) {
-      console.error('Error deleting notification:', error);
-      // Revert optimistic update on error
-      if (notificationToDelete) {
-        setNotifications(prev => [notificationToDelete, ...prev]);
+  useEffect(() => {
+    if (user?.id) {
+      try {
+        localStorage.setItem(`notification_settings_${user.id}`, JSON.stringify({ ...state.settings, userId: user.id }));
+      } catch (err) {
+        console.warn('Failed to save notification settings:', err);
       }
     }
-  }, [notifications]);
+  }, [state.settings, user?.id]);
 
-  // Memoize the unread count calculation
-  const unreadCount = useMemo(() => {
-    return notifications.filter(notification => !notification.isRead).length;
-  }, [notifications]);
-
-  // Memoize the context value to prevent unnecessary re-renders
-  const contextValue = useMemo(() => ({
-    notifications,
-    unreadCount,
-    addNotification,
-    markAsRead,
-    markAllAsRead,
-    deleteNotification,
-    loadNotifications,
-  }), [notifications, unreadCount, addNotification, markAsRead, markAllAsRead, deleteNotification, loadNotifications]);
-
-  return (
-    <NotificationContext.Provider value={contextValue}>
-      {children}
-    </NotificationContext.Provider>
+  const contextValue: NotificationContextType = useMemo(
+    () => ({
+      state,
+      dispatch,
+      addNotification,
+      markAsRead,
+      markAllAsRead,
+      deleteNotification,
+      updateSettings,
+      showToast,
+      removeToast,
+      getFilteredNotifications,
+      loadNotifications,
+    }),
+    [state, addNotification, markAsRead, markAllAsRead, deleteNotification, updateSettings, showToast, removeToast, getFilteredNotifications, loadNotifications],
   );
+
+  return <NotificationContext.Provider value={contextValue}>{children}</NotificationContext.Provider>;
 };
 
-export const useNotifications = () => {
-  const context = useContext(NotificationContext);
-  if (context === undefined) {
-    throw new Error('useNotifications must be used within a NotificationProvider');
-  }
-  return context;
-};
-
-// Export the context for backward compatibility
-export { NotificationContext };
+export default NotificationProvider;

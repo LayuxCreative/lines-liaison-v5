@@ -1,8 +1,6 @@
-import React, { useState, useEffect } from "react";
-import { Eye, EyeOff, Save, AlertTriangle, CheckCircle, Shield, UserCheck, Activity, RefreshCw } from "lucide-react";
+import React, { useState } from "react";
+import { Eye, EyeOff, Save, CheckCircle, Shield, UserCheck, Activity, RefreshCw } from "lucide-react";
 import { useNotifications } from "../../hooks/useNotifications";
-import { useAuth } from "../../contexts/AuthContext";
-import { supabaseService } from "../../services/supabaseService";
 import TwoFactorManagement from "./TwoFactorManagement";
 
 interface SecuritySettingsProps {
@@ -77,57 +75,6 @@ const evaluatePasswordStrength = (password: string): { score: number; feedback: 
   return { score: finalScore, feedback, level };
 };
 
-// Password strength indicator component
-const PasswordStrengthIndicator: React.FC<{ password: string }> = ({ password }) => {
-  const { score, feedback, level } = evaluatePasswordStrength(password);
-  
-  const getColorClass = () => {
-    if (score >= 80) return "bg-green-500";
-    if (score >= 60) return "bg-blue-500";
-    if (score >= 40) return "bg-yellow-500";
-    if (score >= 20) return "bg-orange-500";
-    return "bg-red-500";
-  };
-  
-  const getTextColorClass = () => {
-    if (score >= 80) return "text-green-600";
-    if (score >= 60) return "text-blue-600";
-    if (score >= 40) return "text-yellow-600";
-    if (score >= 20) return "text-orange-600";
-    return "text-red-600";
-  };
-  
-  if (!password) return null;
-  
-  return (
-    <div className="mt-2 space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-gray-600">Password Strength:</span>
-        <span className={`text-sm font-medium ${getTextColorClass()}`}>
-          {level} ({score}%)
-        </span>
-      </div>
-      
-      <div className="w-full bg-gray-200 rounded-full h-2">
-        <div
-          className={`h-2 rounded-full transition-all duration-300 ${getColorClass()}`}
-          style={{ width: `${score}%` }}
-        />
-      </div>
-      
-      {feedback.length > 0 && (
-        <div className="text-xs text-gray-500 space-y-1">
-          <p>To improve password strength:</p>
-          <ul className="list-disc list-inside space-y-0.5">
-            {feedback.map((item, index) => (
-              <li key={index}>{item}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-};
 
 const SecuritySettings: React.FC<SecuritySettingsProps> = ({
   settings,
@@ -144,15 +91,7 @@ const SecuritySettings: React.FC<SecuritySettingsProps> = ({
     confirmPassword: "",
   });
   const [isChangingPassword, setIsChangingPassword] = useState(false);
-  const [passwordStrength, setPasswordStrength] = useState({ score: 0, level: "Weak" });
-
-  // Update password strength when new password changes
-  useEffect(() => {
-    if (passwordData.newPassword) {
-      const strength = evaluatePasswordStrength(passwordData.newPassword);
-      setPasswordStrength({ score: strength.score, level: strength.level });
-    }
-  }, [passwordData.newPassword]);
+  
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

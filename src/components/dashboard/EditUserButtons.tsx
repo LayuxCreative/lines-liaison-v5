@@ -1,7 +1,7 @@
 import React from 'react';
 import { UserMinus } from 'lucide-react';
 import { User as UserType } from '../../types';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { useNotifications } from "../../hooks/useNotifications";
 import { supabaseService } from '../../services/supabaseService';
 
@@ -30,7 +30,7 @@ const EditUserButtons: React.FC<EditUserButtonsProps> = ({
 
   const handleSaveUser = async () => {
     try {
-      const updateData = {
+      const updateData: Record<string, unknown> = {
         name: editingUser.name || '',
         full_name: editingUser.name || '',
         email: editingUser.email || '',
@@ -44,8 +44,7 @@ const EditUserButtons: React.FC<EditUserButtonsProps> = ({
       await supabaseService.updateUser(editingUser.id, updateData);
       
       const response = await supabaseService.getUsers();
-      const updatedUsers = response.data || [];
-      setUsers(updatedUsers);
+      setUsers(prev => Array.isArray(response?.data) ? (response.data as UserType[]) : prev);
 
       addNotification({
         type: 'success',
@@ -73,8 +72,7 @@ const EditUserButtons: React.FC<EditUserButtonsProps> = ({
       await supabaseService.deleteUser(editingUser.id);
       
       const response = await supabaseService.getUsers();
-      const updatedUsers = response.data || [];
-      setUsers(updatedUsers);
+      setUsers(prev => Array.isArray(response?.data) ? (response.data as UserType[]) : prev.filter(u => u.id !== editingUser.id));
 
       addNotification({
         type: 'warning',

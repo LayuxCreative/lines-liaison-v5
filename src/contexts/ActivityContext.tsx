@@ -1,14 +1,6 @@
-import React, { createContext, useContext, useState } from "react";
+import React, { useState } from "react";
 import { Activity } from "../types";
-
-interface ActivityContextType {
-  activities: Activity[];
-  addActivity: (activity: Omit<Activity, "id" | "timestamp">) => Promise<void>;
-  loadActivities: () => Promise<void>;
-  isLoading: boolean;
-}
-
-const ActivityContext = createContext<ActivityContextType | undefined>(undefined);
+import { ActivityContext, ActivityContextType } from './ActivityContextBase';
 
 function ActivityProvider({ children }: { children: React.ReactNode }) {
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -41,12 +33,4 @@ function ActivityProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-function useActivity() {
-  const context = useContext(ActivityContext);
-  if (context === undefined) {
-    throw new Error("useActivity must be used within an ActivityProvider");
-  }
-  return context;
-}
-
-export { ActivityProvider, useActivity };
+export { ActivityProvider };

@@ -1,5 +1,5 @@
 import React from "react";
-import { EnhancedNotification, NotificationPriority } from "../../types";
+import { EnhancedNotification } from "../../types";
 
 interface NotificationBadgeProps {
   notifications: EnhancedNotification[];

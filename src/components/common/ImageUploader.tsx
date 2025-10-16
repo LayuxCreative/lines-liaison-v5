@@ -3,7 +3,7 @@ import { Upload, Image, Camera, Loader2, X, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import UnsplashImagePicker from './UnsplashImagePicker';
 import { imageStorageService, UploadResult } from '../../services/storageService';
-import { UnsplashImage } from '../../services/unsplashService';
+import { UnsplashImage, unsplashService } from '../../services/unsplashService';
 
 interface ImageUploaderProps {
   currentImageUrl?: string;
@@ -48,15 +48,15 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
     setError(null);
 
     try {
-      const result = await imageStorageService.uploadLocalFile(file, userId);
-      
-      if (result.success) {
-        onImageUpload(result);
-        setUploadSuccess(true);
-        setTimeout(() => setUploadSuccess(false), 2000);
-      } else {
-        setError(result.error || 'Failed to upload image');
-      }
+      const result = await imageStorageService.uploadImage(
+        file,
+        'files',
+        `avatars/${userId ?? 'unknown'}/`
+      );
+
+      onImageUpload(result);
+      setUploadSuccess(true);
+      setTimeout(() => setUploadSuccess(false), 2000);
     } catch (error) {
       console.error('Upload error:', error);
       setError('An error occurred while uploading the image');
@@ -74,15 +74,20 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
     setShowUnsplashPicker(false);
 
     try {
-      const result = await imageStorageService.uploadFromUnsplash(image, userId);
-      
-      if (result.success) {
-        onImageUpload(result);
-        setUploadSuccess(true);
-        setTimeout(() => setUploadSuccess(false), 2000);
-      } else {
-        setError(result.error || 'Failed to upload image from Unsplash');
-      }
+      // Download photo as Blob then upload to storage
+      const blob = await unsplashService.downloadPhoto(image.urls.regular);
+      const filename = unsplashService.generateFileName(image);
+      const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
+
+      const result = await imageStorageService.uploadImage(
+        file,
+        'files',
+        `avatars/${userId ?? 'unsplash'}/`
+      );
+
+      onImageUpload(result);
+      setUploadSuccess(true);
+      setTimeout(() => setUploadSuccess(false), 2000);
     } catch (error) {
       console.error('Unsplash upload error:', error);
       setError('An error occurred while uploading image from Unsplash');

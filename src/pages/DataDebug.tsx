@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { useData } from '../contexts/DataContext';
+import { useAuth } from '../hooks/useAuth';
+import { useData } from '../hooks/useData';
 import { supabaseService } from '../services/supabaseService';
 
 const DataDebug: React.FC = () => {

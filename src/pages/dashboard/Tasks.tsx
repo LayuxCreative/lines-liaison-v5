@@ -18,8 +18,8 @@ import {
   ExternalLink,
   Target,
 } from "lucide-react";
-import { useAuth } from "../../contexts/AuthContext";
-import { useData } from "../../contexts/DataContext";
+import { useAuth } from "../../hooks/useAuth";
+import { useData } from "../../hooks/useData";
 import { format, formatDistanceToNow } from "date-fns";
 import CreateTaskModal from '../../components/dashboard/CreateTaskModal';
 

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { useNotifications } from "./NotificationManager";
+import { useNotifications } from "../../hooks/useNotifications";
 import {
   EnhancedNotification,
   NotificationCategory,
@@ -27,7 +27,6 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
     markAsRead,
     markAllAsRead,
     deleteNotification,
-    getUnreadNotifications,
   } = useNotifications();
 
   // Close dropdown when clicking outside
@@ -231,7 +230,11 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
             <div className="flex space-x-2">
               <select
                 value={filter}
-                onChange={(e) => setFilter(e.target.value as any)}
+                onChange={(e) =>
+                  setFilter(
+                    e.target.value as 'all' | 'unread' | NotificationCategory
+                  )
+                }
                 className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="all">All</option>
@@ -246,7 +249,11 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
 
               <select
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
+                onChange={(e) =>
+                  setSortBy(
+                    e.target.value as 'newest' | 'oldest' | 'priority'
+                  )
+                }
                 className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="newest">Newest</option>

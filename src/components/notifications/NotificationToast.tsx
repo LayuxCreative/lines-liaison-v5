@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   EnhancedNotification,
   NotificationPriority,
@@ -29,6 +29,13 @@ export const NotificationToast: React.FC<NotificationToastProps> = ({
     return () => clearTimeout(timer);
   }, []);
 
+  const handleClose = useCallback(() => {
+    setIsExiting(true);
+    setTimeout(() => {
+      onClose();
+    }, 300); // Animation duration
+  }, [onClose]);
+
   useEffect(() => {
     if (autoClose && duration > 0) {
       const timer = setTimeout(() => {
@@ -36,14 +43,7 @@ export const NotificationToast: React.FC<NotificationToastProps> = ({
       }, duration);
       return () => clearTimeout(timer);
     }
-  }, [autoClose, duration]);
-
-  const handleClose = () => {
-    setIsExiting(true);
-    setTimeout(() => {
-      onClose();
-    }, 300); // Animation duration
-  };
+  }, [autoClose, duration, handleClose]);
 
   const handleAction = () => {
     if (onAction) {

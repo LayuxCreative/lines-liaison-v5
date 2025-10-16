@@ -83,7 +83,7 @@ const CallWindow: React.FC<CallWindowProps> = ({
 
       return () => clearInterval(interval);
     }
-  }, [isActive]);
+  }, [isActive, currentUser.id, currentUser.name]);
 
   const startCall = useCallback(async () => {
     try {
@@ -102,7 +102,7 @@ const CallWindow: React.FC<CallWindowProps> = ({
     } catch {
       // Error starting call
     }
-  }, [callType, currentUser.id, currentUser.name]);
+  }, [callType]);
 
   const stopCall = useCallback(() => {
     if (localStream) {
@@ -117,7 +117,7 @@ const CallWindow: React.FC<CallWindowProps> = ({
     }
 
 
-  }, [localStream, currentUser.id, currentUser.name]);
+  }, [localStream]);
 
   const toggleAudio = () => {
     if (localStream) {

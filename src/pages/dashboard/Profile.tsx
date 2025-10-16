@@ -18,8 +18,8 @@ import {
   Users,
   BarChart3,
 } from "lucide-react";
-import { useAuth } from "../../contexts/AuthContext";
-import { useData } from "../../contexts/DataContext";
+import { useAuth } from "../../hooks/useAuth";
+import { useData } from "../../hooks/useData";
 import { format } from "date-fns";
 import ImageUploader from "../../components/common/ImageUploader";
 import { useNotifications } from "../../hooks/useNotifications";
